@@ -191,6 +191,7 @@ Run ShellCheck across the profile and scripts:
 ### Smoke test
 
 - `make test`
+- Runs in a temporary `HOME` and uses `--dry-run` where applicable, so it should not touch your real dotfiles or install anything.
 
 ### Releases
 
