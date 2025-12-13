@@ -1,158 +1,249 @@
-# My-Mac-Bash-profile
+# My Mac Bash Profile
 
-A portable **Bash** login profile that keeps a few macOS niceties while staying friendly on Linux workstations and headless servers.
+A simple, clean Bash setup that gives you a few genuinely useful commands — without breaking anything, installing junk, or getting in your way.
 
-If you just want a simple way to get useful helpers like `sysinfo`, `netinfo`, and `extract` in your Bash login shell—this is it.
-
-## Who this is for (especially on macOS)
-
-- You use **Bash** (either macOS `/bin/bash` or Homebrew Bash)
-- You want a profile you can **symlink** and keep under version control
-- You want it to be **safe to source** (no prompts; no surprise installs)
-
-> macOS note: Apple’s default interactive shell is **zsh**. This repo targets **Bash login shells** (i.e., what reads `~/.bash_profile`). You can still use it by running `bash -l`, or configuring your terminal to start Bash as a login shell.
-
-## Install (recommended)
-
-You have two options. The symlink approach is the simplest and most transparent.
-
-### Option A — Symlink (fastest, easiest)
-
-1. Clone this repo anywhere (example path below):
-
-   - `~/src/My-Mac-Bash-profile`
-
-2. Back up your existing profile (if you have one):
-
-   - `mv ~/.bash_profile ~/.bash_profile.bak`
-
-3. Symlink the repo’s `.bash_profile` into place:
-
-   - `ln -s ~/src/My-Mac-Bash-profile/.bash_profile ~/.bash_profile`
-
-4. Start a new **login** Bash shell:
-
-   - open a new terminal window/tab, or
-   - run: `bash -l`
-
-### Option B — Installer script (repeatable upgrades)
-
-If you prefer an idempotent “install/upgrade” workflow, use `scripts/install.sh`.
-
-Common usage:
-
-- Dry-run (shows what it would do):
-  - `scripts/install.sh --repo "$(pwd)" --dry-run`
-
-- Install (recommended default):
-  - Copies the runtime files into `~/.my-mac-bash-profile`
-  - Symlinks `~/.bash_profile` to that installed copy
-  - Runs the appropriate bootstrap script for your OS
-  - `scripts/install.sh --repo "$(pwd)"`
-
-If you want to **skip bootstrapping** (no package installs), add:
-
-- `scripts/install.sh --repo "$(pwd)" --bootstrap none`
-
-Optional: install a copy into a directory (useful if you don’t want to keep the git checkout around):
-
-- `scripts/install.sh --repo "$(pwd)" --install-dir "$HOME/.my-mac-bash-profile"`
-
-If you prefer the old behavior (symlink directly to the git checkout, no copy), use:
-
-- `scripts/install.sh --repo "$(pwd)" --link-repo`
-
-## Reload (without logging out)
-
-In an existing Bash shell:
-
-- `source ~/.bash_profile`
-
-## What you get
-
-After install, you’ll have these helpers available (among a few others):
-
-- `extract <archive> [dest]` — extract many common archive formats
-- `sysinfo` — compact system summary
-- `netinfo` — compact network summary (with optional cached external IP)
-
-Try them:
-
-- `sysinfo`
-- `netinfo`
-- `extract --help`
-
-## Quick troubleshooting
-
-### “Nothing loads” (common on macOS)
-
-- Confirm you’re in **Bash**:
-  - `echo "$SHELL"`
-  - `echo "$BASH_VERSION"`
-
-- Make sure your terminal starts a **login shell**.
-  - Terminal.app/iTerm can be configured to run Bash as a login shell.
-
-### “`netinfo` feels slow”
-
-`netinfo` can optionally look up your external IP. To disable that lookup:
-
-- `export NETINFO_EXTERNAL_IP=0`
-
-### “A module broke my shell startup”
-
-You can disable modules without editing the repo:
-
-- `export BASH_PROFILE_MODULES_DISABLE="netinfo"`
-
-Then start a fresh login shell (`bash -l`) to confirm your shell starts cleanly.
+Think of it like a small toolbox that quietly makes your terminal nicer on **macOS and Linux**, especially if you move between machines.
 
 ---
 
-## Advanced / reference (details live down here)
+## What this gives you
 
-### How it’s structured
+Once installed, you can open a terminal and just type:
 
-- `.bash_profile` — main entry point (works even when symlinked); loads modules from `profile.d/`
-- `profile.d/10-common.sh` — cross-platform helpers (OS detection, PATH helpers)
-- `profile.d/osx.sh` — macOS-only helpers (guarded)
-- `profile.d/linux.sh` — Linux-only helpers (guarded)
-- `profile.d/extract.sh` — `extract` helper
-- `profile.d/sysinfo.sh` — `sysinfo` helper (also runnable directly)
-- `profile.d/netinfo.sh` — `netinfo` helper (also runnable directly)
+* `sysinfo` → quick view of CPU, memory, disks, uptime
+* `netinfo` → network details at a glance
+* `extract file.zip` → unpack almost any archive
+* `flushdns` → clear DNS cache safely
 
-### Module loading and overrides
+No configuration required. No prompts. Nothing runs unless you ask for it.
 
-The loader supports enabling/disabling modules via environment variables:
+---
 
-- `BASH_PROFILE_MODULES_DISABLE` — space- or comma-separated list to skip
-- `BASH_PROFILE_MODULES_ENABLE` — if set, only modules in this list load
+## Who this is for
 
-Entries may be either the stem (`netinfo`) or filename (`netinfo.sh`).
+This is for you if:
 
-Local overrides (sourced last if present):
+* You use **Bash** (macOS or Linux)
+* You want useful helpers without switching shells
+* You want something safe, predictable, and easy to remove
 
-1. `<repo>/profile.d/local.sh` (recommended; gitignored)
-2. `${XDG_CONFIG_HOME:-~/.config}/my-mac-bash-profile/local.sh`
+**Note for macOS users:**
+macOS defaults to *zsh*. This project is for **Bash**. It works perfectly if:
 
-### Machine-readable output (`--kv`)
+* You run `bash -l`, or
+* Your terminal is set to start Bash as a login shell
 
-Some helpers support `--kv`, which prints one `key=value` per line (stable order).
+---
 
-- `sysinfo --kv`
-- `netinfo --kv`
+## Install — step by step (recommended)
 
-### Bootstrap scripts (optional dependency installers)
+### 1. Download the project
 
-Best-effort dependency installers live in `scripts/`:
+Clone the repository:
 
-- `scripts/bootstrap-linux.sh` (supports `--full` and `--dry-run`)
-- `scripts/bootstrap-macos.sh` (supports `--dry-run`)
+```bash
+git clone <REPO_URL>
+cd My-Mac-Bash-profile
+```
 
-### Dev notes
+(If you don’t use git, download the ZIP and unzip it.)
 
-- Developer-focused docs: `readme_for_dev.md`
-- Roadmap: `roadmap.md`
-- Lint/tests:
-  - `make lint`
-  - `make test`
+---
+
+### 2. Run the installer
+
+From inside the project folder:
+
+```bash
+scripts/install.sh --repo "$(pwd)"
+```
+
+That’s it.
+
+What the installer does:
+
+* Copies the profile into `~/.my-mac-bash-profile`
+* Links your `~/.bash_profile` to it
+* Sets things up so it works on macOS *and* Linux
+* Does **not** modify system files
+
+Nothing destructive. Nothing hidden.
+
+---
+
+### 3. Reload your shell
+
+Either:
+
+* Open a new terminal window, **or**
+* Reload manually:
+
+```bash
+source ~/.bash_profile
+```
+
+---
+
+## Using it
+
+Just type the commands by name.
+
+Try these first:
+
+```bash
+sysinfo
+netinfo
+extract archive.tar.gz
+```
+
+If a command exists, it’s ready to use. If it doesn’t, nothing breaks.
+
+---
+
+## Common commands you now have
+
+| Command      | What it does                             |
+| ------------ | ---------------------------------------- |
+| `sysinfo`    | System overview: CPU, RAM, disks, uptime |
+| `netinfo`    | Network status and IPs                   |
+| `extract`    | Unpacks zip, tar, gz, 7z, rar, and more  |
+| `flushdns`   | Clears DNS cache (safe, best‑effort)     |
+| `jd <url>`   | Resume‑safe file download                |
+| `jdir <url>` | Download a full directory                |
+
+macOS‑only extras:
+
+* `cdf` — jump to the front Finder window folder
+* `gosu` — open a new terminal tab as root
+
+---
+
+## Troubleshooting
+
+### “Nothing loads”
+
+Check that you are actually using Bash:
+
+```bash
+echo "$BASH_VERSION"
+```
+
+If this prints nothing, your shell is not Bash.
+
+On macOS, set your terminal to start **Bash as a login shell**, or run:
+
+```bash
+bash -l
+```
+
+### “Something broke my shell”
+
+Disable a feature without editing files:
+
+```bash
+export BASH_PROFILE_MODULES_DISABLE="netinfo"
+```
+
+Open a new terminal to confirm everything works.
+
+---
+
+### Uninstalling
+
+To remove everything:
+
+```bash
+rm -rf ~/.my-mac-bash-profile
+rm ~/.bash_profile
+```
+
+Nothing else is touched.
+
+---
+
+# Advanced / Power‑User Section
+
+Everything above is all most people need. The rest is here if you like to tinker.
+
+---
+
+## How it works
+
+* `~/.bash_profile` is the entry point
+* Modules live in `profile.d/`
+* Each feature is isolated and guarded by OS checks
+
+Structure:
+
+* `profile.d/10-common.sh` — cross‑platform helpers
+* `profile.d/osx.sh` — macOS‑only helpers
+* `profile.d/linux.sh` — Linux‑only helpers
+* `profile.d/sysinfo.sh`
+* `profile.d/netinfo.sh`
+* `profile.d/extract.sh`
+
+---
+
+## Enabling / disabling modules
+
+Disable specific modules:
+
+```bash
+export BASH_PROFILE_MODULES_DISABLE="netinfo extract"
+```
+
+Load only specific modules:
+
+```bash
+export BASH_PROFILE_MODULES_ENABLE="sysinfo"
+```
+
+Names can be `netinfo` or `netinfo.sh`.
+
+---
+
+## Local overrides
+
+Add custom logic without touching the repo:
+
+* `profile.d/local.sh` (git‑ignored)
+* `~/.config/my-mac-bash-profile/local.sh`
+
+Loaded last.
+
+---
+
+## Machine‑readable output
+
+Some tools support `--kv` for scripting:
+
+```bash
+sysinfo --kv
+netinfo --kv
+```
+
+Outputs stable `key=value` pairs.
+
+---
+
+## Bootstrap scripts
+
+Optional helpers for installing dependencies:
+
+* `scripts/bootstrap-linux.sh`
+* `scripts/bootstrap-macos.sh`
+
+Both support `--dry-run`.
+
+---
+
+## Developer notes
+
+* Dev docs: `readme_for_dev.md`
+* Roadmap: `roadmap.md`
+* Lint/tests:
+
+```bash
+make lint
+make test
+```

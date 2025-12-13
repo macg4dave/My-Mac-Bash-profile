@@ -21,7 +21,7 @@ Options:
   --target <path>      Where to install the symlink (default: $HOME/.bash_profile)
   --dry-run, -n        Print what would change, but do not modify anything
   --no-backup          Do not create backups when replacing an existing target
-  --force              Replace an existing target even if it is not a file/symlink
+  --yes, -y            Assume yes for overwrite prompts (non-interactive safe)
 
 Bootstrap:
   --bootstrap <auto|linux|macos|none>   Run bootstrap script after install (default: auto)
@@ -39,6 +39,87 @@ EOF
 # --------
 
 log() { printf '%s\n' "$*"; }
+
+confirm() {
+  # Usage: confirm "message"
+  # Returns 0 for yes, 1 for no.
+  local msg="$1"
+  [[ "${assume_yes}" -eq 1 ]] && return 0
+  [[ "${dry_run}" -eq 1 ]] && return 0
+
+  # If we can't prompt (non-interactive), default to "no".
+  if [[ ! -t 0 ]]; then
+    echo "$msg" >&2
+    echo "Refusing to overwrite in non-interactive mode. Re-run with --yes to proceed." >&2
+    return 1
+  fi
+
+  local reply
+  while true; do
+    read -r -p "$msg [y/N] " reply
+    case "${reply}" in
+      [yY]|[yY][eE][sS]) return 0 ;;
+      ""|[nN]|[nN][oO]) return 1 ;;
+      *) echo "Please answer y or n." >&2 ;;
+    esac
+  done
+}
+
+is_linux() {
+  [[ "$(uname -s 2>/dev/null || echo 'Unknown')" != "Darwin" ]]
+}
+
+ensure_bashrc_sources_bash_profile() {
+  # Fedora and many Linux terminals start interactive shells as non-login shells.
+  # Bash reads ~/.bashrc in that case, not ~/.bash_profile.
+  #
+  # This makes the install more "it just works" by ensuring ~/.bashrc sources
+  # ~/.bash_profile (guarded to avoid recursion if users later source ~/.bashrc
+  # from ~/.bash_profile).
+  local bashrc="${HOME}/.bashrc"
+  local begin_marker="# >>> my-mac-bash-profile (source .bash_profile for non-login shells) >>>"
+  local end_marker="# <<< my-mac-bash-profile <<<"
+
+  [[ -n "${HOME:-}" ]] || return 0
+
+  if [[ -f "$bashrc" ]] && grep -qF "$begin_marker" "$bashrc" 2>/dev/null; then
+    return 0
+  fi
+
+  log "Ensuring $bashrc sources $HOME/.bash_profile for interactive non-login shells"
+
+  # Create the file if it doesn't exist.
+  run touch "$bashrc"
+
+  if [[ "$dry_run" -eq 1 ]]; then
+    log "--- would append to $bashrc ---"
+    log "$begin_marker"
+    log "# If this terminal starts Bash as a non-login shell (common on Fedora),"
+    log "# load the login profile too."
+    log "if [[ \$- == *i* ]] && [[ -z \"\${__MMBP_BASHRC_SOURCED_PROFILE:-}\" ]] && [[ -f \"\$HOME/.bash_profile\" ]]; then"
+    log "  __MMBP_BASHRC_SOURCED_PROFILE=1"
+    log "  # shellcheck source=/dev/null"
+    log "  source \"\$HOME/.bash_profile\""
+    log "fi"
+    log "$end_marker"
+    log "--- end ---"
+    return 0
+  fi
+
+  {
+    printf '\n%s\n' "$begin_marker"
+    cat <<'EOF'
+# If this terminal starts Bash as a non-login shell (common on Fedora),
+# load the login profile too.
+if [[ $- == *i* ]] && [[ -z "${__MMBP_BASHRC_SOURCED_PROFILE:-}" ]] && [[ -f "$HOME/.bash_profile" ]]; then
+  __MMBP_BASHRC_SOURCED_PROFILE=1
+  # shellcheck source=/dev/null
+  source "$HOME/.bash_profile"
+fi
+EOF
+    printf '%s\n' "$end_marker"
+  } >>"$bashrc"
+}
 
 run() {
   if [[ "${dry_run}" -eq 1 ]]; then
@@ -82,10 +163,8 @@ deploy_install_dir() {
   fi
 
   if [[ -d "$install_dir" ]]; then
-    # By default, do not overwrite an existing install directory.
-    # This keeps the installer conservative and idempotent.
-    if [[ "$force" -ne 1 ]]; then
-      log "Install dir already exists; leaving in place (use --force to redeploy): $install_dir"
+    if ! confirm "Install dir already exists: $install_dir. Redeploy (overwrite) the installed copy?"; then
+      log "Leaving existing install dir in place: $install_dir"
       return 0
     fi
 
@@ -165,9 +244,9 @@ abs_path() {
 
 dry_run=0
 backup=1
-force=0
 bootstrap="auto"
 full=0
+assume_yes=0
 
 repo_root=""
 install_dir=""
@@ -200,8 +279,8 @@ while [[ $# -gt 0 ]]; do
     --no-backup)
       backup=0
       ;;
-    --force)
-      force=1
+    --yes|-y)
+      assume_yes=1
       ;;
     --bootstrap)
       [[ $# -ge 2 ]] || { echo "--bootstrap requires a value" >&2; usage; exit 2; }
@@ -271,21 +350,26 @@ if is_same_symlink "$target_abs" "$repo_profile_abs"; then
   log "Already installed: $target_abs -> $repo_profile_abs"
 else
   if [[ -e "$target_abs" || -L "$target_abs" ]]; then
+    if ! confirm "Target already exists: $target_abs. Replace it?"; then
+      echo "Aborted." >&2
+      exit 1
+    fi
     if [[ "$backup" -eq 1 ]]; then
       bkp="$(unique_backup_path "$target_abs.bak.$(now_stamp)")"
       log "Backing up existing $target_abs -> $bkp"
       run mv "$target_abs" "$bkp"
     else
-      if [[ "$force" -ne 1 ]]; then
-        echo "Target exists ($target_abs). Re-run with --force or omit --no-backup." >&2
-        exit 1
-      fi
       run rm -rf "$target_abs"
     fi
   fi
 
   log "Installing symlink: $target_abs -> $repo_profile_abs"
   run ln -s "$repo_profile_abs" "$target_abs"
+fi
+
+# On Linux, ensure non-login shells still load ~/.bash_profile via ~/.bashrc.
+if is_linux; then
+  ensure_bashrc_sources_bash_profile
 fi
 
 case "$bootstrap" in

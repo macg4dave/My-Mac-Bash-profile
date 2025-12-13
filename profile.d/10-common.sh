@@ -51,7 +51,12 @@ if [[ $- == *i* ]]; then
     if [[ "${BASH_PROFILE_CD_LS:-1}" != "0" ]]; then
         cd() {
             builtin cd "$@" || return
-            command ls -hla
+            # Colorize output when supported.
+            if ${IS_MAC:-false}; then
+                command ls -GFhla
+            else
+                command ls --color=auto -Fhla
+            fi
         }
     fi
 fi

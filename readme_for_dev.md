@@ -88,6 +88,8 @@ If you want a fresh login shell (closer to “real” startup behavior), start a
 - `profile.d/extract.sh` — `extract` function for common archive formats.
 - `profile.d/sysinfo.sh` — provides a `sysinfo` helper (safe to source; also runnable directly).
 - `profile.d/netinfo.sh` — provides a `netinfo` helper (safe to source; also runnable directly).
+- `profile.d/flushdns.sh` — provides a `flushdns` helper (safe to source; also runnable directly).
+- `profile.d/jdir.sh` — provides `jdir` / `jd` helpers (safe to source; also runnable directly).
 
 ## Modules, ordering, and local overrides
 
@@ -118,7 +120,9 @@ To customize without committing changes, add one of these files (they are source
 
 - `extract <archive> [dest]` — extract many archive types into a folder (supports `--list`, `--force`, `--verbose`). Includes basic tab completion for flags and paths in interactive Bash.
 - `sysinfo` — show a compact one-line system summary (OS, disk, uptime, load, CPU, RAM, network counters).
-- `netinfo` — show a small network summary (default route/interface, local IP, Wi‑Fi SSID when available, VPN interfaces, cached external IP).
+- `netinfo` — show a small network summary (default route/interface, local IP, Wi-Fi SSID when available, VPN interfaces, cached external IP).
+- `flushdns` — best-effort DNS cache flush helper (macOS + common Linux setups).
+- `jdir` / `jd` — friendly wrappers around `wget` (recursive directory download vs. single URL resume).
 - `cdf` (macOS) — `cd` to the front Finder window.
 - `gosu` (macOS) — open a Terminal tab that switches to a root shell.
 

@@ -1,6 +1,46 @@
 #!/usr/bin/env bash
 
 #------------------------------------------------------------------------------
+## Aliases and environment variables
+# Common convenience aliases and environment variable exports.
+# Easy to remember aliases for common commands.
+#------------------------------------------------------------------------------
+
+if ${IS_MAC:-false}; then
+	alias ls='ls -GFhla'
+else
+	# GNU ls: keep similar UX.
+	alias ls='ls --color=auto -Fhla'
+fi
+
+
+#------------------------------------------------------------------------------
+## Export PATHS
+# Common PATH exports and hygiene.
+#------------------------------------------------------------------------------
+
+export PS1="\[\e[36;40m\]\u\[\e[m\]\[\e[35m\]@\[\e[m\][\[\e[33m\]\h\[\e[m\]]\[\e[36m\]\w\[\e[m\]: "
+
+# macOS color env is harmless elsewhere, but only set when on macOS.
+if ${IS_MAC:-false}; then
+	export CLICOLOR=1
+	export LSCOLORS=ExFxBxDxCxegedabagacad
+	export BASH_SILENCE_DEPRECATION_WARNING=1
+fi
+
+# PATH hygiene: only prepend directories that exist.
+if declare -F path_prepend_if_exists >/dev/null 2>&1; then
+	path_prepend_if_exists "/usr/local/opt/cython/bin"
+	path_prepend_if_exists "/usr/local/sbin"
+	path_prepend_if_exists "/opt/local/bin"
+	path_prepend_if_exists "/opt/local/sbin"
+else
+	export PATH="/usr/local/opt/cython/bin:$PATH"
+	export PATH="/usr/local/sbin:$PATH"
+	export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+fi
+
+#------------------------------------------------------------------------------
 # Bash login profile (portable: macOS + Linux)
 #
 # This file is typically symlinked to ~/.bash_profile.
@@ -76,49 +116,6 @@ if [[ -r "$__bp_profile_d/10-common.sh" ]]; then
 	source "$__bp_profile_d/10-common.sh"
 fi
 
-#---------------
-## Export PATHS
-#---------------
-
-export PS1="\[\e[36;40m\]\u\[\e[m\]\[\e[35m\]@\[\e[m\][\[\e[33m\]\h\[\e[m\]]\[\e[36m\]\w\[\e[m\]: "
-
-# macOS color env is harmless elsewhere, but only set when on macOS.
-if ${IS_MAC:-false}; then
-	export CLICOLOR=1
-	export LSCOLORS=ExFxBxDxCxegedabagacad
-	export BASH_SILENCE_DEPRECATION_WARNING=1
-fi
-
-# PATH hygiene: only prepend directories that exist.
-if declare -F path_prepend_if_exists >/dev/null 2>&1; then
-	path_prepend_if_exists "/usr/local/opt/cython/bin"
-	path_prepend_if_exists "/usr/local/sbin"
-	path_prepend_if_exists "/opt/local/bin"
-	path_prepend_if_exists "/opt/local/sbin"
-else
-	export PATH="/usr/local/opt/cython/bin:$PATH"
-	export PATH="/usr/local/sbin:$PATH"
-	export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
-fi
-
-
-
-#--------
-## Alias
-#---------
-
-if ${IS_MAC:-false}; then
-	alias ls='ls -GFhla'
-	alias flushDNS='dscacheutil -flushcache'
-else
-	# GNU ls: keep similar UX.
-	alias ls='ls --color=auto -Fhla'
-	alias flushDNS='echo "flushDNS is only supported on macOS (dscacheutil)." >&2; false'
-fi
-
-alias jdir='wget -r -c --no-parent '
-alias jd='wget -c '
-alias checkip='curl ipinfo.io'
 
 #------------------------------------------------------------------------------
 # Load remaining modules (if present).
