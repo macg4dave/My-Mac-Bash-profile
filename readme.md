@@ -26,13 +26,22 @@ If you want a fresh login shell (closer to “real” startup behavior), start a
 
 - `.bash_profile` — resolves its own location (works even when symlinked) and sources modules.
 - `profile.d/10-common.sh` — cross-platform helpers (OS detection, `has_cmd`, PATH helpers).
-- `profile.d/20-macos.sh` — macOS-only helpers (guarded by `IS_MAC`).
+- `profile.d/osx.sh` — macOS-only helpers (plugin-friendly entry point; guarded by `IS_MAC`).
+- `profile.d/linux.sh` — Linux-only helpers (plugin-friendly entry point; guarded by `IS_LINUX`).
+- `profile.d/20-macos.sh` — legacy macOS-only helpers (guarded by `IS_MAC`).
 - `profile.d/30-extract.sh` — `extract` function for common archive formats.
 - `profile.d/40-sysinfo.sh` — provides a `sysinfo` helper (safe to source; also runnable directly).
 - `profile.d/50-netinfo.sh` — provides a `netinfo` helper (safe to source; also runnable directly).
 - `profile.d/60-homevpn.sh` — provides `gohome`/`stophome` (sshuttle wrapper) and `make_ssh`.
 
-Legacy, unnumbered module filenames (e.g., `profile.d/sysinfo.sh`) are kept as thin wrappers for compatibility.
+Plugin-friendly, unnumbered module entry points (sourced when present):
+
+- `profile.d/extract.sh`
+- `profile.d/sysinfo.sh`
+- `profile.d/netinfo.sh`
+- `profile.d/homevpn.sh`
+
+Legacy numbered module filenames remain supported.
 
 Modules are loaded in lexical order; `10-common.sh` is sourced first.
 
@@ -67,4 +76,23 @@ Modules are loaded in lexical order; `10-common.sh` is sourced first.
 
 - macOS-only bits are guarded so they won’t break Linux shell startup.
 - If you want different alias defaults (e.g., `ls` flags), adjust them in `.bash_profile`.
+
+## Dev tooling
+
+### Lint
+
+Run ShellCheck across the profile and scripts:
+
+- `make lint`
+
+### Smoke test
+
+- `make test`
+
+## Bootstrap scripts
+
+Best-effort dependency installers live in `scripts/`:
+
+- `scripts/bootstrap-linux.sh` (supports `--full` and `--dry-run`)
+- `scripts/bootstrap-macos.sh` (supports `--dry-run`)
 

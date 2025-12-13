@@ -76,12 +76,38 @@ if [[ -d "$__bp_profile_d" ]]; then
 	__bp_nullglob_was_set=0
 	shopt -q nullglob && __bp_nullglob_was_set=1
 	shopt -s nullglob
-	for __bp_f in "$__bp_profile_d"/[0-9][0-9]-*.sh; do
+
+	# Plugin-friendly mode: if unnumbered modules exist, prefer those.
+	# Backward-compatible mode: otherwise load legacy numbered modules.
+	__bp_has_unnumbered=0
+	for __bp_f in "$__bp_profile_d"/*.sh; do
 		[[ -r "$__bp_f" ]] || continue
-		[[ "$__bp_f" == "$__bp_profile_d/10-common.sh" ]] && continue
-		# shellcheck source=/dev/null
-		source "$__bp_f"
+		case "$__bp_f" in
+			"$__bp_profile_d"/[0-9][0-9]-*.sh) continue ;;
+		esac
+		__bp_has_unnumbered=1
+		break
 	done
+
+	if [[ "$__bp_has_unnumbered" -eq 1 ]]; then
+		for __bp_f in "$__bp_profile_d"/*.sh; do
+			[[ -r "$__bp_f" ]] || continue
+			case "$__bp_f" in
+				"$__bp_profile_d"/[0-9][0-9]-*.sh) continue ;;
+			esac
+			# shellcheck source=/dev/null
+			source "$__bp_f"
+		done
+	else
+		for __bp_f in "$__bp_profile_d"/[0-9][0-9]-*.sh; do
+			[[ -r "$__bp_f" ]] || continue
+			[[ "$__bp_f" == "$__bp_profile_d/10-common.sh" ]] && continue
+			# shellcheck source=/dev/null
+			source "$__bp_f"
+		done
+	fi
+	unset __bp_has_unnumbered
+
 	if [[ "$__bp_nullglob_was_set" -eq 1 ]]; then
 		shopt -s nullglob
 	else
