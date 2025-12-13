@@ -192,6 +192,10 @@ Run ShellCheck across the profile and scripts:
 
 - `make test`
 
+### Releases
+
+- `CHANGELOG.md` tracks changes; when you cut releases, tag them as `vX.Y.Z`.
+
 ## Bootstrap scripts
 
 Best-effort dependency installers live in `scripts/`:

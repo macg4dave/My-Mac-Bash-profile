@@ -18,7 +18,7 @@ Options:
   -h, --help     Show this help and exit.
   -v, --verbose  Print the command used and enable verbose mode for tools that support it.
   -l, --list     List archive contents (when supported).
-  -f, --force    Allow unsafe paths in archive listings and allow overwriting.
+  -f, --force    Allow potentially unsafe paths in archives and allow overwriting.
 
 Exit codes:
   0 success
@@ -69,10 +69,11 @@ USAGE
     esac
     dest="${dest:-$base}"
 
-    # Safety: refuse obvious path traversal when listing tar/zip/7z unless forced.
+    # Safety: refuse obvious path traversal in tar/zip/7z unless forced.
     _extract_check_paths() {
-        local cmd="$1"
-        local file="$2"
+        # Usage: _extract_check_paths <archive> <list-cmd...>
+        local file="$1"
+        shift
         local line
         while IFS= read -r line; do
             [[ -z "$line" ]] && continue
@@ -80,7 +81,7 @@ USAGE
                 echo "Potential unsafe path detected: $line (use --force to override)" >&2
                 return 1
             fi
-        done < <($cmd "$file")
+        done < <("$@" "$file")
     }
 
     [[ -d "$dest" ]] || mkdir -p "$dest"
@@ -122,27 +123,37 @@ USAGE
     local cmd_desc=""
     case "$lc" in
         *.tar.bz2|*.tbz2)
-            ! $force && _extract_check_paths "tar tjf" "$archive" || true
+            if ! $force; then
+                _extract_check_paths "$archive" tar tjf || return 1
+            fi
             cmd_desc="tar xjf"
             tar xjf "$archive" -C "$dest" "${tar_keep[@]}" ${verbose:+-v}
             ;;
         *.tar.gz|*.tgz)
-            ! $force && _extract_check_paths "tar tzf" "$archive" || true
+            if ! $force; then
+                _extract_check_paths "$archive" tar tzf || return 1
+            fi
             cmd_desc="tar xzf"
             tar xzf "$archive" -C "$dest" "${tar_keep[@]}" ${verbose:+-v}
             ;;
         *.tar.xz|*.txz)
-            ! $force && _extract_check_paths "tar tJf" "$archive" || true
+            if ! $force; then
+                _extract_check_paths "$archive" tar tJf || return 1
+            fi
             cmd_desc="tar xJf"
             tar xJf "$archive" -C "$dest" "${tar_keep[@]}" ${verbose:+-v}
             ;;
         *.tar.z|*.tar.Z)
-            ! $force && _extract_check_paths "tar tZf" "$archive" || true
+            if ! $force; then
+                _extract_check_paths "$archive" tar tZf || return 1
+            fi
             cmd_desc="tar xZf"
             tar xZf "$archive" -C "$dest" "${tar_keep[@]}" ${verbose:+-v}
             ;;
         *.tar)
-            ! $force && _extract_check_paths "tar tf" "$archive" || true
+            if ! $force; then
+                _extract_check_paths "$archive" tar tf || return 1
+            fi
             cmd_desc="tar xf"
             tar xf "$archive" -C "$dest" "${tar_keep[@]}" ${verbose:+-v}
             ;;
@@ -151,7 +162,9 @@ USAGE
                 echo "unzip is required to extract zip archives." >&2
                 return 1
             fi
-            ! $force && _extract_check_paths "unzip -Z1" "$archive" || true
+            if ! $force; then
+                _extract_check_paths "$archive" unzip -Z1 || return 1
+            fi
             cmd_desc="unzip"
             unzip ${force:+-o} ${verbose:+-v} -d "$dest" "$archive"
             ;;
@@ -168,7 +181,9 @@ USAGE
                 echo "7z is required to extract 7z archives." >&2
                 return 1
             fi
-            ! $force && _extract_check_paths "7z l -ba" "$archive" || true
+            if ! $force; then
+                _extract_check_paths "$archive" 7z l -ba || return 1
+            fi
             cmd_desc="7z x"
             7z x "$archive" -o"$dest" ${verbose:+-bb1}
             ;;

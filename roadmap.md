@@ -29,7 +29,7 @@ Last updated: 2025-12-13
 | P1 — Stability & compatibility | ✅ | Safe to source on macOS `/bin/bash` (3.2) and Linux Bash; CI runs lint+tests; README support matrix + install steps are accurate | Keep an eye on hidden portability hazards as modules grow | — |
 | P2 — UX & observability | ✅ | `sysinfo`/`netinfo`/`extract` have `--help`, stable exit codes, and at least one scriptable output mode | Consider adding a `--tsv` mode if/when needed | — |
 | P3 — Extensibility & configuration | ✅ | Local overrides work without forking; module ordering & enable/disable are documented and predictable | Decide on a long-term module naming/ordering convention | — |
-| P4 — Distribution & updates | ⏳ | Optional installer is idempotent; changelog + tags exist; upgrades are repeatable | Document installer usage + add smoke coverage | — |
+| P4 — Distribution & updates | ⏳ | Optional installer is idempotent; changelog exists; releases/tags are defined and repeatable | Cut first release tag (`v0.1.0`) when ready | — |
 | P5 — Polish & nice-to-haves | ✅ | Optional features remain opt-in and do not slow shell startup noticeably | (done) `extract` completion + safer installer backups + optional `--install-dir` deployment | — |
 
 ## Priorities (P1 → P5)
@@ -46,10 +46,10 @@ These decisions should be made early; the rest of the roadmap assumes they are a
 
 | Decision | Default recommendation | Why it matters | Status |
 |---|---|---|---:|
-| Minimum Bash version | **Support macOS Bash 3.2** | Prevent “can’t even login” failures on stock macOS | 🟡 |
-| Target platforms | “Supported” vs “best-effort” matrix | Sets what CI must cover and what breakages are acceptable | 🟡 |
-| Output contracts | Human vs machine output for helpers | Enables stable scripting and non-breaking UX changes | 🟡 |
-| Install approach | Documented symlink install + optional installer later | Reduces surprises for dotfiles users; keeps adoption easy | 🟡 |
+| Minimum Bash version | **Support macOS Bash 3.2** | Prevent “can’t even login” failures on stock macOS | ✅ |
+| Target platforms | “Supported” vs “best-effort” matrix | Sets what CI must cover and what breakages are acceptable | ✅ |
+| Output contracts | Human vs machine output for helpers | Enables stable scripting and non-breaking UX changes | ✅ |
+| Install approach | Documented symlink install + optional installer later | Reduces surprises for dotfiles users; keeps adoption easy | ✅ |
 
 ## Recommended implementation order (dependency-first)
 
@@ -94,7 +94,7 @@ This is the ordered list of blockers/risks. Any milestone marked ⛔ should refe
 - [x] **P1.1** Decide and document minimum Bash version (recommended: macOS Bash 3.2 compatible).
 - [x] **P1.2** Remove/guard Bash 4+ syntax across `profile.d/*.sh`.
   - [x] Replace `${var,,}` usage in `profile.d/extract.sh` with a portable lowercasing approach.
-  - [ ] Spot-check for other Bash 4+ features (associative arrays, `mapfile`, `globstar`, etc.).
+  - [x] Spot-check for other Bash 4+ features (associative arrays, `mapfile`, `globstar`, etc.).
 - [x] **P1.3** Enforce “safe to source” rule for all modules.
 - [x] **P1.4** Add GitHub Actions workflow to run `make lint` + `make test` on Linux + macOS.
 - [x] **P1.5** Update `readme.md` install section + troubleshooting for supported shells/OSes.
@@ -175,6 +175,7 @@ This is the ordered list of blockers/risks. Any milestone marked ⛔ should refe
 - [x] **P4.1** Define install/upgrade contract (what changes, what gets backed up, what is opt-in).
 - [x] **P4.2** Write `scripts/install.sh`
 - [x] **P4.3** Document installer usage in `readme.md` and add a smoke test for `--dry-run`.
+- [ ] **P4.4** Cut a first release tag (`v0.1.0`) and move “Unreleased” notes into `CHANGELOG.md`.
 
 ### Blockers (P4)
 
