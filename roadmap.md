@@ -1,3 +1,5 @@
+# Roadmap
+
 ## Vision
 
 Deliver a portable, well-documented Bash profile that keeps macOS niceties while remaining first-class on Linux workstations and headless servers. The profile should feel safe to version, easy to extend, and resilient to missing dependencies.
@@ -15,11 +17,10 @@ Deliver a portable, well-documented Bash profile that keeps macOS niceties while
 
 | Task | Priority | Status | Blockers | Notes |
 | --- | --- | --- | --- | --- |
-| Harden `.bash_profile` (history, prompt, PATH hygiene) | ⏳ In Progress | None | merged in current branch |
-| Document configuration variables in `readme.md` | P2 | ⏳ In Progress | Needs decisions on secrets storage | add env-var table + quickstart |
-| Build `sysinfo` + `netinfo` telemetry helpers | P2 | ⏳ In Progress | Requires cross-platform RAM parsing | extend to show VPN + Wi-Fi |
-| Add `shellcheck` CI and pre-commit hook | P3 | 🟡 Not Started | Needs GitHub Actions minutes | re-use local `act` workflow |
-| Split platform logic into `profile.d/` modules | P3 | 🟡 Not Started | Requires agreed directory layout | candidate structure in Next |
+| Harden `.bash_profile` (history, prompt, PATH hygiene) | P1 | ✅ Complete | None | loader now sources numbered `profile.d/` modules safely |
+| Document configuration variables in `readme.md` | P2 | ⏳ In Progress | Needs decisions on secrets storage | initial quickstart + env-var cheat-sheet added |
+| Build `sysinfo` + `netinfo` telemetry helpers | P2 | ✅ Complete | None | `sysinfo` now includes RAM; `netinfo` added (VPN/Wi‑Fi/external IP cache) |
+| Split platform logic into `profile.d/` modules | P3 | ✅ Complete | None | numbered modules + legacy wrapper files for compatibility |
 | Bootstrap scripts for macOS/Linux deps | P4 | 🟡 Not Started | Need package inventory | detect brew/apt/pacman |
 | Secrets management via `pass`/Keychain | P5 | 🟡 Not Started | Decide secrets tool | could leverage age + sops |
 
@@ -27,28 +28,28 @@ Legend: ✅ complete, ⏳ in progress, 🟡 not started.
 
 ## Now (v1.0 – Sprint 0)
 
-### Tasks
+### Tasks (Sprint 0)
 
 - **P1 – Ship robust history + prompt defaults**
   - [x] Enable `histappend`, `PROMPT_COMMAND` sync, git branch info.
 - **P1 – Guard server helpers**
-  - [ ] Validate `make_ssh`, `gohome`, `stophome` inputs in tests.
+  - [x] Validate `make_ssh`, `gohome`, `stophome` inputs in tests.
 - **P2 – Document entry points**
-  - [ ] Add environment variable cheat-sheet plus reload instructions in `readme.md`.
+  - [x] Add environment variable cheat-sheet plus reload instructions in `readme.md`.
 - **P2 – Cross-platform QA**
   - [ ] Test `.bash_profile` on macOS Ventura, Ubuntu 22.04, Fedora 40.
 
-### Blockers/Risks
+### Blockers/Risks (Sprint 0)
 
-- Need access to Linux + macOS hosts for validation.
+- Need access to a macOS host for validating macOS-only helpers (`cdf`, `gosu`) and macOS telemetry branches.
 - Secrets not yet abstracted; reviewers must avoid committing real credentials.
 
 ## Next (v1.1 – Sprint 1)
 
-### Tasks
+### Tasks (Sprint 1)
 
 - **P2 – Automated linting**
-  - [ ] Add `shellcheck` 
+  - [ ] Add `shellcheck`
   - [ ] Provide `just lint` or `make lint` target for local runs.
 - **P3 – Plugin-friendly structure**
   - [ ] Create `profile.d/osx.sh` and `profile.d/linux.sh`.
@@ -60,7 +61,7 @@ Legend: ✅ complete, ⏳ in progress, 🟡 not started.
   - [ ] Scaffold `scripts/bootstrap-macos.sh` (Homebrew installs).
   - [ ] Scaffold `scripts/bootstrap-linux.sh` (apt/pacman detection).
 
-### Blockers/Risks
+### Blockers/Risks (Sprint 1)
 
 - GitHub Actions minutes availability.
 - Need standard for storing helper scripts (`scripts/` vs `tools/`).

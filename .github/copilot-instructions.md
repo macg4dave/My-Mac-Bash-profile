@@ -47,3 +47,25 @@ This repository contains a Bash login profile with a focus on cross-platform com
 3. **Follow Existing Conventions**: Copilot suggestions should align with the existing coding style and conventions used in this repository. This includes function definitions, commenting style, and best practices for shell scripting.
 4. **Avoid Sensitive Information**: Do not allow Copilot to insert any sensitive information, such as API keys or passwords, into the codebase.
 5. **Review and Test Thoroughly**: Always review Copilot-generated code for correctness, security, and performance. Test any changes in a safe environment before merging them into the main branch.
+
+
+## Bash Scripting Best Practices- Use `shellcheck` to lint and validate scripts.
+- Quote variables to prevent word splitting and globbing.
+- Avoid using `eval` unless absolutely necessary.
+- Use functions to encapsulate reusable logic.
+- Use clear and descriptive names for functions and variables.
+- Include comments to explain complex logic or decisions.
+- Guard OS-specific commands with appropriate checks.
+- Ensure that changes do not break existing functionality.
+- Keep the user experience consistent, especially for interactive elements like prompts and aliases.
+- Use environment variables and detection logic instead of hardcoding paths.
+- write tests for functions that have complex logic or side effects.
+- Document the purpose and usage of functions in comments.
+- commit small, focused changes to make reviews easier.
+- comments should be clear and concise, explaining the "why" behind decisions.
+
+## Documentation Updates
+- When Copilot suggests changes to documentation files, ensure that the information is accurate and up to-date.
+- Keep the `readme.md` user-friendly and informative, reflecting any changes made to the codebase.
+- Update the `roadmap.md` to reflect the current status of tasks and priorities accurately.
+By following these instructions, you can effectively leverage GitHub Copilot to enhance the development process while maintaining the quality and integrity of this repository.
