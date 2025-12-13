@@ -42,7 +42,7 @@ macOS defaults to *zsh*. This project is for **Bash**. It works perfectly if:
 Clone the repository:
 
 ```bash
-git clone <REPO_URL>
+git clone https://github.com/macg4dave/My-Mac-Bash-profile
 cd My-Mac-Bash-profile
 ```
 
