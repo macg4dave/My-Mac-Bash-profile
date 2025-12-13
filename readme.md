@@ -7,10 +7,6 @@ This repo’s main entry point is `.bash_profile`, which optionally sources modu
 
 ## Install
 
-The intended setup is to **symlink** this repo’s `.bash_profile` into your home directory.
-
-- Back up any existing profile first.
-- Create a symlink so updates via `git pull` are picked up automatically.
 
 ## Reload (without logging out)
 
@@ -26,32 +22,18 @@ If you want a fresh login shell (closer to “real” startup behavior), start a
 
 - `.bash_profile` — resolves its own location (works even when symlinked) and sources modules.
 - `profile.d/10-common.sh` — cross-platform helpers (OS detection, `has_cmd`, PATH helpers).
-- `profile.d/osx.sh` — macOS-only helpers (plugin-friendly entry point; guarded by `IS_MAC`).
-- `profile.d/linux.sh` — Linux-only helpers (plugin-friendly entry point; guarded by `IS_LINUX`).
-- `profile.d/20-macos.sh` — legacy macOS-only helpers (guarded by `IS_MAC`).
-- `profile.d/30-extract.sh` — `extract` function for common archive formats.
-- `profile.d/40-sysinfo.sh` — provides a `sysinfo` helper (safe to source; also runnable directly).
-- `profile.d/50-netinfo.sh` — provides a `netinfo` helper (safe to source; also runnable directly).
-- `profile.d/60-homevpn.sh` — provides `gohome`/`stophome` (sshuttle wrapper) and `make_ssh`.
+- `profile.d/osx.sh` — macOS-only helpers (guarded by `IS_MAC`).
+- `profile.d/linux.sh` — Linux-only helpers (guarded by `IS_LINUX`).
+- `profile.d/extract.sh` — `extract` function for common archive formats.
+- `profile.d/sysinfo.sh` — provides a `sysinfo` helper (safe to source; also runnable directly).
+- `profile.d/netinfo.sh` — provides a `netinfo` helper (safe to source; also runnable directly).
 
-Plugin-friendly, unnumbered module entry points (sourced when present):
-
-- `profile.d/extract.sh`
-- `profile.d/sysinfo.sh`
-- `profile.d/netinfo.sh`
-- `profile.d/homevpn.sh`
-
-Legacy numbered module filenames remain supported.
-
-Modules are loaded in lexical order; `10-common.sh` is sourced first.
 
 ## Included helpers
 
 - `extract <archive> [dest]` — extract many archive types into a folder (supports `--list`, `--force`, `--verbose`).
 - `sysinfo` — show a compact one-line system summary (OS, disk, uptime, load, CPU, RAM, network counters).
 - `netinfo` — show a small network summary (default route/interface, local IP, Wi‑Fi SSID when available, VPN interfaces, cached external IP).
-- `make_ssh <alias> <hostname> [user] [port] [identity_file]` — append a safe SSH config stanza to `~/.ssh/config` (or use `--dry-run`).
-- `gohome` / `stophome` — start/stop an `sshuttle` VPN using env var configuration.
 - `cdf` (macOS) — `cd` to the front Finder window.
 - `gosu` (macOS) — open a Terminal tab that switches to a root shell.
 
@@ -65,12 +47,6 @@ Modules are loaded in lexical order; `10-common.sh` is sourced first.
 | `NETINFO_EXTERNAL_IP` | `1` | If set to `0`, `netinfo` will skip external IP lookup (useful for offline environments). |
 | `NETINFO_EXTERNAL_IP_TTL` | `300` | External IP cache TTL in seconds for `netinfo`. |
 | `NETINFO_WIFI_DEVICE` | `en0` | macOS Wi‑Fi device used by `netinfo` (only relevant on macOS). |
-| `GOHOME_REMOTE` | unset | Remote for `sshuttle`, e.g. `user@bastion.example.com`. |
-| `GOHOME_SUBNETS` | unset | Space-separated CIDRs to route, e.g. `10.0.0.0/8 192.168.0.0/16`. |
-| `GOHOME_SSH_PORT` | unset | Optional SSH port for `GOHOME_REMOTE`. |
-| `GOHOME_SSH_KEY` | unset | Optional SSH identity file path for `gohome`. |
-| `GOHOME_DNS` | `0` | If set to `1`, passes `--dns` to `sshuttle`. |
-| `GOHOME_SUDO` | `1` | If set to `0`, runs `sshuttle`/`kill` without `sudo`. |
 
 ## Notes
 
@@ -95,4 +71,3 @@ Best-effort dependency installers live in `scripts/`:
 
 - `scripts/bootstrap-linux.sh` (supports `--full` and `--dry-run`)
 - `scripts/bootstrap-macos.sh` (supports `--dry-run`)
-

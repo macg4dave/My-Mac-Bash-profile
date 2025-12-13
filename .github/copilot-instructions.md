@@ -12,7 +12,6 @@
 
 ## OS- and dependency-sensitive commands
 - `macinfo`, `gosu`, and `cdf` rely on macOS-only tooling (`osascript`, `Finder`, `sw_vers`, `top -l`).
-- `gohome`/`stophome` rely on `sshuttle` and environment variables.
 
 When adding or modifying functions that use non-portable commands:
 - Guard by OS and/or command existence (example checks):
