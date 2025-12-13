@@ -100,7 +100,7 @@ fi
 
 # Ensure installer --install-dir deploys a copy into a home-style directory.
 install_dir="$tmpdir/home-install"
-install_dir_out="$(bash "$repo_root/scripts/install.sh" --repo "$repo_root" --install-dir "$install_dir" --target "$install_target")"
+install_dir_out="$(bash "$repo_root/scripts/install.sh" --repo "$repo_root" --install-dir "$install_dir" --target "$install_target" --bootstrap none)"
 
 # If we unexpectedly failed, surface context.
 [[ -n "$install_dir_out" ]] || true

@@ -2,10 +2,12 @@
 set -euo pipefail
 
 # Conservative installer for this repo.
-# - Installs by symlinking the repo's `.bash_profile` into place.
-# - Makes a timestamped backup before changing an existing target.
-# - Idempotent: if already installed, does nothing.
-# - Optional: can run bootstrap scripts (off by default).
+# Default behavior (safe + repeatable):
+# - Copies runtime files into an install directory (default: $HOME/.my-mac-bash-profile)
+# - Symlinks the installed .bash_profile to the target (default: $HOME/.bash_profile)
+# - Makes a timestamped backup before changing an existing target (unless --no-backup)
+# - Idempotent: if already installed, does nothing
+# - Runs bootstrap for the current OS by default (disable with --bootstrap none)
 
 usage() {
   cat <<'EOF'
@@ -14,13 +16,15 @@ Usage: scripts/install.sh [options]
 Options:
   --repo <path>        Path to the repo root (default: auto-detect from this script)
   --install-dir <path> Copy runtime files into this directory, then link the target to it
+                      (default: $HOME/.my-mac-bash-profile)
+  --link-repo          Do not copy files; link the target directly to the git checkout
   --target <path>      Where to install the symlink (default: $HOME/.bash_profile)
   --dry-run, -n        Print what would change, but do not modify anything
   --no-backup          Do not create backups when replacing an existing target
   --force              Replace an existing target even if it is not a file/symlink
 
-Bootstrap (optional):
-  --bootstrap <auto|linux|macos|none>   Run bootstrap script after install (default: none)
+Bootstrap:
+  --bootstrap <auto|linux|macos|none>   Run bootstrap script after install (default: auto)
   --full                               When bootstrapping on Linux, request optional packages
 
 Exit codes:
@@ -123,16 +127,36 @@ is_same_symlink() {
 abs_path() {
   # Resolve an absolute path without relying on GNU readlink -f.
   # Works for directories and existing files.
+  # For non-existing paths, it resolves the parent directory and appends basename.
   local p="$1"
-  if [[ -d "$p" ]]; then
-    (cd -P -- "$p" && pwd)
+  # Absolute paths: if we can't resolve (e.g., parent doesn't exist during --dry-run),
+  # return the absolute path as-is.
+  if [[ "$p" == /* ]]; then
+    if [[ -d "$p" ]]; then
+      (cd -P -- "$p" 2>/dev/null && pwd) && return 0
+    fi
+    local d b
+    d="$(dirname "$p")"
+    b="$(basename "$p")"
+    if [[ -d "$d" ]]; then
+      (cd -P -- "$d" 2>/dev/null && printf '%s/%s\n' "$(pwd)" "$b") && return 0
+    fi
+    printf '%s\n' "$p"
     return 0
   fi
-  local d
+
+  # Relative paths.
+  if [[ -d "$p" ]]; then
+    (cd -P -- "$p" 2>/dev/null && pwd) && return 0
+  fi
+  local d b
   d="$(dirname "$p")"
-  local b
   b="$(basename "$p")"
-  (cd -P -- "$d" && printf '%s/%s\n' "$(pwd)" "$b")
+  if [[ -d "$d" ]]; then
+    (cd -P -- "$d" 2>/dev/null && printf '%s/%s\n' "$(pwd)" "$b") && return 0
+  fi
+  # Last resort: anchor to current working directory.
+  (cd -P -- "$(pwd -P)" 2>/dev/null && printf '%s/%s\n' "$(pwd)" "$p")
 }
 
 # --------
@@ -142,11 +166,12 @@ abs_path() {
 dry_run=0
 backup=1
 force=0
-bootstrap="none"
+bootstrap="auto"
 full=0
 
 repo_root=""
 install_dir=""
+link_repo=0
 target="${HOME}/.bash_profile"
 
 while [[ $# -gt 0 ]]; do
@@ -165,6 +190,9 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { echo "--install-dir requires a value" >&2; usage; exit 2; }
       install_dir="$2"
       shift
+      ;;
+    --link-repo)
+      link_repo=1
       ;;
     --dry-run|-n)
       dry_run=1
@@ -196,6 +224,12 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+if [[ "$link_repo" -eq 1 && -n "$install_dir" ]]; then
+  echo "--link-repo cannot be combined with --install-dir" >&2
+  usage
+  exit 2
+fi
+
 if [[ -z "$repo_root" ]]; then
   # script_dir/.. is repo root
   script_dir="$(cd -P -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -217,7 +251,14 @@ fi
 
 target_abs="$(abs_path "$target")"
 
-# Optional deployment mode: copy runtime files into install_dir and link to that.
+# Default deployment mode: copy runtime files into install_dir and link to that.
+# Use --link-repo to preserve the old behavior of linking directly to the checkout.
+if [[ "$link_repo" -eq 0 ]]; then
+  if [[ -z "$install_dir" ]]; then
+    install_dir="$HOME/.my-mac-bash-profile"
+  fi
+fi
+
 if [[ -n "$install_dir" ]]; then
   install_dir_abs="$(abs_path "$install_dir")"
   deploy_install_dir "$repo_root" "$install_dir_abs"
@@ -264,25 +305,25 @@ case "$bootstrap" in
   none)
     ;;
   linux)
-    if [[ -x "$repo_root/scripts/bootstrap-linux.sh" ]]; then
+    if [[ -r "$repo_root/scripts/bootstrap-linux.sh" ]]; then
       args=()
       [[ "$full" -eq 1 ]] && args+=("--full")
       [[ "$dry_run" -eq 1 ]] && args+=("--dry-run")
       log "Running bootstrap (linux): scripts/bootstrap-linux.sh ${args[*]}"
-      run "$repo_root/scripts/bootstrap-linux.sh" "${args[@]}"
+      run bash "$repo_root/scripts/bootstrap-linux.sh" "${args[@]}"
     else
-      echo "bootstrap-linux.sh not found or not executable" >&2
+      echo "bootstrap-linux.sh not found or not readable" >&2
       exit 1
     fi
     ;;
   macos)
-    if [[ -x "$repo_root/scripts/bootstrap-macos.sh" ]]; then
+    if [[ -r "$repo_root/scripts/bootstrap-macos.sh" ]]; then
       args=()
       [[ "$dry_run" -eq 1 ]] && args+=("--dry-run")
       log "Running bootstrap (macos): scripts/bootstrap-macos.sh ${args[*]}"
-      run "$repo_root/scripts/bootstrap-macos.sh" "${args[@]}"
+      run bash "$repo_root/scripts/bootstrap-macos.sh" "${args[@]}"
     else
-      echo "bootstrap-macos.sh not found or not executable" >&2
+      echo "bootstrap-macos.sh not found or not readable" >&2
       exit 1
     fi
     ;;
