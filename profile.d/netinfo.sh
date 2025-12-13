@@ -111,7 +111,53 @@ _netinfo_vpn_ifaces_macos() {
     fi
 }
 
+_netinfo_join_lines() {
+    # Join stdin lines with commas (no trailing comma).
+    awk 'NR==1{printf "%s",$0; next} {printf ",%s",$0} END{print ""}'
+}
+
 netinfo() {
+    local output_mode="human"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                cat <<'USAGE'
+Usage: netinfo [--help] [--plain|--no-color] [--kv]
+
+Human output is the default.
+
+Options:
+  -h, --help        Show this help and exit.
+  --plain, --no-color
+                   Disable ANSI color (netinfo output is plain by default).
+  --kv              Machine-readable key=value output (one per line).
+
+Exit codes:
+  0 success
+  1 runtime error
+  2 usage/unknown option
+USAGE
+                return 0
+                ;;
+            --kv|--key-value)
+                output_mode="kv"
+                ;;
+            --plain|--no-color|--color)
+                # Accepted for consistency with other helpers. netinfo is plain by default.
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                echo "netinfo: unknown option: $1" >&2
+                return 2
+                ;;
+        esac
+        shift
+    done
+
     local os iface gw lip ssid ext vpn
     os="$(uname -s 2>/dev/null || echo 'Unknown')"
 
@@ -120,13 +166,13 @@ netinfo() {
         gw="$(_netinfo_default_gw_linux)"
         lip="$(_netinfo_local_ip_linux)"
         ssid="$(_netinfo_wifi_ssid_linux)"
-        vpn="$(_netinfo_vpn_ifaces_linux | paste -sd, - 2>/dev/null)"
+        vpn="$(_netinfo_vpn_ifaces_linux | _netinfo_join_lines 2>/dev/null)"
     elif [[ "$os" == "Darwin" ]]; then
         iface="$(_netinfo_default_iface_macos)"
         gw="$(_netinfo_default_gw_macos)"
         lip="$(_netinfo_local_ip_macos)"
         ssid="$(_netinfo_wifi_ssid_macos)"
-        vpn="$(_netinfo_vpn_ifaces_macos | paste -sd, - 2>/dev/null)"
+        vpn="$(_netinfo_vpn_ifaces_macos | _netinfo_join_lines 2>/dev/null)"
     fi
 
     iface="${iface:-N/A}"
@@ -135,6 +181,17 @@ netinfo() {
     ssid="${ssid:-N/A}"
     vpn="${vpn:-none}"
     ext="$(_netinfo_external_ip)"
+
+    if [[ "$output_mode" == "kv" ]]; then
+        printf '%s=%s\n' os "$os"
+        printf '%s=%s\n' default_interface "$iface"
+        printf '%s=%s\n' gateway "$gw"
+        printf '%s=%s\n' local_ip "$lip"
+        printf '%s=%s\n' wifi_ssid "$ssid"
+        printf '%s=%s\n' vpn_interfaces "$vpn"
+        printf '%s=%s\n' external_ip "$ext"
+        return 0
+    fi
 
     echo "OS: $os"
     echo "Default interface: $iface"
@@ -146,5 +203,5 @@ netinfo() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    netinfo
+    netinfo "$@"
 fi

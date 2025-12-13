@@ -56,7 +56,6 @@ run brew install shellcheck coreutils wget curl
 
 cat <<'EOF'
 
-Optional:
-- sshuttle (used by gohome/stophome):
-    python3 -m pip install --user sshuttle
+Optional (used by `extract` for additional archive formats):
+- brew install p7zip unrar
 EOF

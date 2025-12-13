@@ -11,7 +11,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/bootstrap-linux.sh [--full] [--dry-run]
 
-  --full     Install optional tools used by some helpers (sshuttle, 7z, unrar, iwgetid, etc)
+  --full     Install optional tools used by some helpers (7z, unrar, iwgetid, iproute2, etc)
   --dry-run  Print the install commands without running them
 EOF
 }
@@ -44,7 +44,7 @@ run() {
 # Prefer explicit manager commands to keep behavior predictable.
 if command -v apt-get >/dev/null 2>&1; then
   core_pkgs=(shellcheck curl wget unzip xz-utils)
-  opt_pkgs=(sshuttle p7zip-full unrar wireless-tools iproute2)
+  opt_pkgs=(p7zip-full unrar wireless-tools iproute2)
   run sudo apt-get update
   run sudo apt-get install -y "${core_pkgs[@]}"
   if [[ "$full" -eq 1 ]]; then
@@ -55,7 +55,7 @@ fi
 
 if command -v dnf >/dev/null 2>&1; then
   core_pkgs=(ShellCheck curl wget unzip xz)
-  opt_pkgs=(sshuttle p7zip p7zip-plugins unrar wireless-tools iproute)
+  opt_pkgs=(p7zip p7zip-plugins unrar wireless-tools iproute)
   run sudo dnf install -y "${core_pkgs[@]}"
   if [[ "$full" -eq 1 ]]; then
     run sudo dnf install -y "${opt_pkgs[@]}"
@@ -65,7 +65,7 @@ fi
 
 if command -v yum >/dev/null 2>&1; then
   core_pkgs=(ShellCheck curl wget unzip xz)
-  opt_pkgs=(sshuttle p7zip p7zip-plugins unrar wireless-tools iproute)
+  opt_pkgs=(p7zip p7zip-plugins unrar wireless-tools iproute)
   run sudo yum install -y "${core_pkgs[@]}"
   if [[ "$full" -eq 1 ]]; then
     run sudo yum install -y "${opt_pkgs[@]}"
@@ -75,7 +75,7 @@ fi
 
 if command -v pacman >/dev/null 2>&1; then
   core_pkgs=(shellcheck curl wget unzip xz)
-  opt_pkgs=(sshuttle p7zip unrar wireless_tools iproute2)
+  opt_pkgs=(p7zip unrar wireless_tools iproute2)
   run sudo pacman -Sy --noconfirm "${core_pkgs[@]}"
   if [[ "$full" -eq 1 ]]; then
     run sudo pacman -Sy --noconfirm "${opt_pkgs[@]}"
@@ -85,7 +85,7 @@ fi
 
 if command -v zypper >/dev/null 2>&1; then
   core_pkgs=(ShellCheck curl wget unzip xz)
-  opt_pkgs=(sshuttle p7zip unrar wireless-tools iproute2)
+  opt_pkgs=(p7zip unrar wireless-tools iproute2)
   run sudo zypper --non-interactive install "${core_pkgs[@]}"
   if [[ "$full" -eq 1 ]]; then
     run sudo zypper --non-interactive install "${opt_pkgs[@]}"
@@ -95,7 +95,7 @@ fi
 
 if command -v apk >/dev/null 2>&1; then
   core_pkgs=(shellcheck curl wget unzip xz)
-  opt_pkgs=(sshuttle p7zip unrar wireless-tools iproute2)
+  opt_pkgs=(p7zip unrar wireless-tools iproute2)
   run sudo apk add "${core_pkgs[@]}"
   if [[ "$full" -eq 1 ]]; then
     run sudo apk add "${opt_pkgs[@]}"

@@ -10,12 +10,12 @@
 # Resolve this file's directory even when ~/.bash_profile is a symlink.
 __bp_source="${BASH_SOURCE[0]}"
 while [[ -L "$__bp_source" ]]; do
-	__bp_dir="$(cd -P -- "$(dirname -- "$__bp_source")" && pwd)"
-	__bp_link="$(readlink -- "$__bp_source")" || break
+	__bp_dir="$(cd -P -- "$(dirname "$__bp_source")" && pwd)"
+	__bp_link="$(readlink "$__bp_source" 2>/dev/null)" || break
 	[[ "$__bp_link" != /* ]] && __bp_link="$__bp_dir/$__bp_link"
 	__bp_source="$__bp_link"
 done
-__bp_root="$(cd -P -- "$(dirname -- "$__bp_source")" && pwd)"
+__bp_root="$(cd -P -- "$(dirname "$__bp_source")" && pwd)"
 
 __bp_profile_d="$__bp_root/profile.d"
 

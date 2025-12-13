@@ -10,21 +10,39 @@ if ! declare -F has_cmd >/dev/null 2>&1; then
 fi
 
 extract() {
+    extract_usage() {
+        cat <<'USAGE'
+Usage: extract [--help] [-v|--verbose] [-l|--list] [-f|--force] <archive> [dest]
+
+Options:
+  -h, --help     Show this help and exit.
+  -v, --verbose  Print the command used and enable verbose mode for tools that support it.
+  -l, --list     List archive contents (when supported).
+  -f, --force    Allow unsafe paths in archive listings and allow overwriting.
+
+Exit codes:
+  0 success
+  1 runtime error
+  2 usage/unknown option
+USAGE
+    }
+
     local verbose=false list=false force=false archive dest
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            -h|--help)    extract_usage; return 0 ;;
             -v|--verbose) verbose=true ;;
             -l|--list)    list=true ;;
             -f|--force)   force=true ;;
             --) shift; break ;;
-            -*) echo "Unknown option: $1" >&2; return 1 ;;
+            -*) echo "Unknown option: $1" >&2; extract_usage >&2; return 2 ;;
             *)  archive="${archive:-$1}" ;;
         esac
         shift
     done
     if [[ -z "$archive" ]]; then
-        echo "Usage: extract [-v|--verbose] [--list] [--force] <archive> [dest]" >&2
-        return 1
+        extract_usage >&2
+        return 2
     fi
     [[ $# -gt 0 ]] && dest="$1"
 
@@ -34,8 +52,8 @@ extract() {
     fi
 
     local archive_name base lc
-    archive_name="$(basename -- "$archive")"
-    lc="${archive_name,,}"
+    archive_name="$(basename "$archive")"
+    lc="$(LC_ALL=C printf '%s' "$archive_name" | tr '[:upper:]' '[:lower:]')"
 
     # Guess destination directory if not provided.
     case "$lc" in
@@ -67,8 +85,17 @@ extract() {
 
     [[ -d "$dest" ]] || mkdir -p "$dest"
 
-    local tar_keep=("--keep-old-files")
-    $force && tar_keep=()
+    # Don't overwrite existing files unless --force was requested.
+    # GNU tar supports: --keep-old-files
+    # bsdtar (macOS /usr/bin/tar) supports: -k
+    local tar_keep=()
+    if ! $force; then
+        if tar --help 2>/dev/null | grep -q -- '--keep-old-files'; then
+            tar_keep=("--keep-old-files")
+        else
+            tar_keep=(-k)
+        fi
+    fi
 
     if $list; then
         case "$lc" in
