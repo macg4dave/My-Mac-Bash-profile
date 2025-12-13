@@ -19,6 +19,57 @@ __bp_root="$(cd -P -- "$(dirname "$__bp_source")" && pwd)"
 
 __bp_profile_d="$__bp_root/profile.d"
 
+#------------------------------------------------------------------------------
+# Module loader configuration
+#
+# - By default, all modules in profile.d/ are loaded.
+# - You can disable modules without editing this repo by setting:
+#     BASH_PROFILE_MODULES_DISABLE="netinfo sysinfo"   (names or filenames)
+# - You can allowlist modules (load only these) with:
+#     BASH_PROFILE_MODULES_ENABLE="extract netinfo"
+# - Lists may be space- or comma-separated. Entries may be either:
+#     netinfo    OR    netinfo.sh
+#
+# Local overrides are sourced last (if present):
+#   1) <repo>/profile.d/local.sh                (recommended; gitignored)
+#   2) ${XDG_CONFIG_HOME:-~/.config}/my-mac-bash-profile/local.sh
+#------------------------------------------------------------------------------
+
+__bp_modules_enable="${BASH_PROFILE_MODULES_ENABLE:-}"
+__bp_modules_disable="${BASH_PROFILE_MODULES_DISABLE:-}"
+
+__bp_list_contains_any() {
+	# Usage: __bp_list_contains_any "list" candidate1 [candidate2 ...]
+	local list="$1"
+	shift
+	local token candidate
+	list="${list//,/ }"
+	for token in $list; do
+		for candidate in "$@"; do
+			[[ "$token" == "$candidate" ]] && return 0
+		done
+	done
+	return 1
+}
+
+__bp_should_source_module() {
+	local path="$1"
+	local base stem
+	base="$(basename "$path")"
+	stem="${base%.sh}"
+
+	# Local overrides are handled explicitly at the end.
+	[[ "$base" == "local.sh" ]] && return 1
+
+	if [[ -n "$__bp_modules_enable" ]]; then
+		__bp_list_contains_any "$__bp_modules_enable" "$stem" "$base" || return 1
+	fi
+	if [[ -n "$__bp_modules_disable" ]]; then
+		__bp_list_contains_any "$__bp_modules_disable" "$stem" "$base" && return 1
+	fi
+	return 0
+}
+
 # Source common helpers first (defines has_cmd + IS_MAC/IS_LINUX + PATH helpers).
 if [[ -r "$__bp_profile_d/10-common.sh" ]]; then
 	# shellcheck source=/dev/null
@@ -95,6 +146,7 @@ if [[ -d "$__bp_profile_d" ]]; then
 			case "$__bp_f" in
 				"$__bp_profile_d"/[0-9][0-9]-*.sh) continue ;;
 			esac
+			__bp_should_source_module "$__bp_f" || continue
 			# shellcheck source=/dev/null
 			source "$__bp_f"
 		done
@@ -102,11 +154,24 @@ if [[ -d "$__bp_profile_d" ]]; then
 		for __bp_f in "$__bp_profile_d"/[0-9][0-9]-*.sh; do
 			[[ -r "$__bp_f" ]] || continue
 			[[ "$__bp_f" == "$__bp_profile_d/10-common.sh" ]] && continue
+			__bp_should_source_module "$__bp_f" || continue
 			# shellcheck source=/dev/null
 			source "$__bp_f"
 		done
 	fi
 	unset __bp_has_unnumbered
+
+	# Local override modules (sourced last).
+	if [[ -r "$__bp_profile_d/local.sh" ]]; then
+		# shellcheck source=/dev/null
+		source "$__bp_profile_d/local.sh"
+	fi
+	__bp_xdg_local="${XDG_CONFIG_HOME:-$HOME/.config}/my-mac-bash-profile/local.sh"
+	if [[ -r "$__bp_xdg_local" ]]; then
+		# shellcheck source=/dev/null
+		source "$__bp_xdg_local"
+	fi
+	unset __bp_xdg_local
 
 	if [[ "$__bp_nullglob_was_set" -eq 1 ]]; then
 		shopt -s nullglob
@@ -116,7 +181,8 @@ if [[ -d "$__bp_profile_d" ]]; then
 	unset __bp_nullglob_was_set
 fi
 
-unset __bp_source __bp_dir __bp_link __bp_root __bp_profile_d __bp_f
+unset __bp_source __bp_dir __bp_link __bp_root __bp_profile_d __bp_f __bp_modules_enable __bp_modules_disable
+unset -f __bp_list_contains_any __bp_should_source_module 2>/dev/null || true
 
 #-----------------------------------
 ## END

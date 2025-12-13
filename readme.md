@@ -27,6 +27,33 @@ Example (paths are just examples):
 
 After that, start a new **login** shell (or see “Reload” below).
 
+### Optional installer script
+
+If you prefer a repeatable install/upgrade flow, use `scripts/install.sh`.
+
+What it does:
+
+- Creates a symlink from `<repo>/.bash_profile` to `~/.bash_profile`.
+- If a target already exists, it creates a timestamped backup (unless you pass `--no-backup`).
+- It is idempotent (if the correct symlink is already in place, it does nothing).
+- Supports `--dry-run` to show what it would do.
+
+Optional (deploy a copy into your home directory):
+
+- `--install-dir <path>` copies the runtime files (`.bash_profile`, `profile.d/`, `scripts/`) into a directory you choose, then symlinks `~/.bash_profile` to that installed copy.
+  - This is useful if you don’t want to keep the git checkout around permanently.
+  - Conservative by default: if the install dir already exists, the installer leaves it in place. Use `--force` to redeploy (and it will create a backup unless you pass `--no-backup`).
+
+Example:
+
+- Install into `~/.my-mac-bash-profile` and link `~/.bash_profile`:
+  - `scripts/install.sh --install-dir "$HOME/.my-mac-bash-profile"`
+
+Optional:
+
+- `--bootstrap auto` runs `scripts/bootstrap-linux.sh` or `scripts/bootstrap-macos.sh` after installing.
+- `--full` can be combined with Linux bootstrapping to request optional packages.
+
 ### Notes for terminal setup
 
 - `.bash_profile` is read by **login** Bash shells.
@@ -37,6 +64,9 @@ After that, start a new **login** shell (or see “Reload” below).
 - **Nothing seems to load**: confirm you’re running **Bash** (not zsh/fish) and that your terminal starts a **login** shell.
 - **macOS says Bash is “old”**: that’s expected on stock macOS (`/bin/bash` is 3.2). This repo aims to remain compatible.
 - **`netinfo` feels slow**: set `NETINFO_EXTERNAL_IP=0` to skip external IP lookup (it’s also cached by default).
+- **A module broke shell startup**: start a clean Bash without reading profiles, then re-enable modules one by one.
+  - Disable modules with `BASH_PROFILE_MODULES_DISABLE` (e.g. `netinfo`, `sysinfo`).
+  - If you added local overrides, temporarily move/rename `profile.d/local.sh` (or the XDG config override file).
 
 
 ## Reload (without logging out)
@@ -59,9 +89,34 @@ If you want a fresh login shell (closer to “real” startup behavior), start a
 - `profile.d/sysinfo.sh` — provides a `sysinfo` helper (safe to source; also runnable directly).
 - `profile.d/netinfo.sh` — provides a `netinfo` helper (safe to source; also runnable directly).
 
+## Modules, ordering, and local overrides
+
+### Loader behavior
+
+`.bash_profile` loads modules from `profile.d/`.
+
+- If any **unnumbered** modules exist (e.g. `netinfo.sh`), the loader prefers those and loads them in glob order.
+- Otherwise it loads legacy **numbered** modules (e.g. `10-common.sh`, `20-foo.sh`) in numeric order.
+
+### Enable/disable modules (no forking)
+
+You can control which modules are sourced via environment variables:
+
+- `BASH_PROFILE_MODULES_DISABLE` — space- or comma-separated list of modules to skip.
+- `BASH_PROFILE_MODULES_ENABLE` — if set, only modules in this list will be loaded.
+
+Entries may be either the stem (`netinfo`) or filename (`netinfo.sh`).
+
+### Local overrides
+
+To customize without committing changes, add one of these files (they are sourced **last** if present):
+
+1. `<repo>/profile.d/local.sh` (recommended; this repo ignores it via `.gitignore`)
+2. `${XDG_CONFIG_HOME:-~/.config}/my-mac-bash-profile/local.sh`
+
 ## Included helpers
 
-- `extract <archive> [dest]` — extract many archive types into a folder (supports `--list`, `--force`, `--verbose`).
+- `extract <archive> [dest]` — extract many archive types into a folder (supports `--list`, `--force`, `--verbose`). Includes basic tab completion for flags and paths in interactive Bash.
 - `sysinfo` — show a compact one-line system summary (OS, disk, uptime, load, CPU, RAM, network counters).
 - `netinfo` — show a small network summary (default route/interface, local IP, Wi‑Fi SSID when available, VPN interfaces, cached external IP).
 - `cdf` (macOS) — `cd` to the front Finder window.
@@ -112,6 +167,8 @@ Keys (stable order):
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `BASH_PROFILE_CD_LS` | `1` | If set to `0`, disables the convenience behavior in `profile.d/10-common.sh` that runs `ls -hla` after each successful `cd` (interactive shells only). |
+| `BASH_PROFILE_MODULES_DISABLE` | empty | Space- or comma-separated list of modules to skip (by stem or filename). |
+| `BASH_PROFILE_MODULES_ENABLE` | empty | If set, only modules in this list will be loaded (by stem or filename). |
 | `IS_MAC` | auto | Set by the profile to `true`/`false` based on `uname -s` (intended as a read-only flag for gating macOS-only behavior). |
 | `IS_LINUX` | auto | Set by the profile to `true`/`false` based on `uname -s` (intended as a read-only flag). |
 | `NETINFO_EXTERNAL_IP` | `1` | If set to `0`, `netinfo` will skip external IP lookup (useful for offline environments). |

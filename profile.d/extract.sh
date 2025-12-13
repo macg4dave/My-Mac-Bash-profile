@@ -224,3 +224,58 @@ USAGE
 
     $verbose && echo "Extracted with: $cmd_desc -> $dest"
 }
+
+#------------------------------------------------------------------------------
+# Bash completion (opt-in by context: only registered for interactive shells)
+#
+# Notes:
+# - Compatible with macOS /bin/bash 3.2.
+# - Safe to source: defines a function and (optionally) registers completion.
+# - We keep the completion lightweight and conservative.
+#------------------------------------------------------------------------------
+
+_extract_completion() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    # Complete options.
+    if [[ "$cur" == -* ]]; then
+        # shellcheck disable=SC2207
+        COMPREPLY=( $(compgen -W "-h --help -v --verbose -l --list -f --force --" -- "$cur") )
+        return 0
+    fi
+
+    # Determine whether we've already seen the archive argument.
+    # extract [opts] <archive> [dest]
+    local i word archive_seen=0
+    for (( i=1; i<COMP_CWORD; i++ )); do
+        word="${COMP_WORDS[i]}"
+        case "$word" in
+            --) break ;;
+            -h|--help|-v|--verbose|-l|--list|-f|--force) continue ;;
+            -*) continue ;; # unknown option; don't try to be clever
+            *) archive_seen=1; break ;;
+        esac
+    done
+
+    if [[ "$archive_seen" -eq 0 ]]; then
+        # First positional arg: archive file.
+        # Prefer files; allow common archive suffixes but don't over-filter.
+        # shellcheck disable=SC2207
+        COMPREPLY=( $(compgen -f -- "$cur") )
+        return 0
+    fi
+
+    # Second positional arg: destination directory.
+    # shellcheck disable=SC2207
+    COMPREPLY=( $(compgen -d -- "$cur") )
+    return 0
+}
+
+# Register completion only in interactive shells.
+if [[ $- == *i* ]]; then
+    # `complete` is a bash builtin, but guard anyway.
+    if command -v complete >/dev/null 2>&1; then
+        complete -F _extract_completion extract 2>/dev/null || true
+    fi
+fi

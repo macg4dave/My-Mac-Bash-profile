@@ -26,11 +26,11 @@ Last updated: 2025-12-13
 
 | Milestone | Status | Definition of done (DoD) | Next concrete action | Blocked by |
 |---|---:|---|---|---|
-| P1 — Stability & compatibility | 🟡 | Safe to source on macOS `/bin/bash` (3.2) and Linux Bash; CI runs lint+tests; README support matrix + install steps are accurate | Decide Bash support baseline and eliminate Bash 4+ hazards | B-001, B-002 |
-| P2 — UX & observability | 🟡 | `sysinfo`/`netinfo`/`extract` have `--help`, stable exit codes, and at least one scriptable output mode | Define output contract (human vs machine) | B-004 |
-| P3 — Extensibility & configuration | 🟡 | Local overrides work without forking; module ordering & enable/disable are documented and predictable | Document current loader behavior in `.bash_profile` | B-003 |
-| P4 — Distribution & updates | 🟡 | Optional installer is idempotent; changelog + tags exist; upgrades are repeatable | Decide installer scope and backup policy | B-005 |
-| P5 — Polish & nice-to-haves | 🟡 | Optional features remain opt-in and do not slow shell startup noticeably | Pick 1–2 small improvements after P1–P4 land | — |
+| P1 — Stability & compatibility | ✅ | Safe to source on macOS `/bin/bash` (3.2) and Linux Bash; CI runs lint+tests; README support matrix + install steps are accurate | Keep an eye on hidden portability hazards as modules grow | — |
+| P2 — UX & observability | ✅ | `sysinfo`/`netinfo`/`extract` have `--help`, stable exit codes, and at least one scriptable output mode | Consider adding a `--tsv` mode if/when needed | — |
+| P3 — Extensibility & configuration | ✅ | Local overrides work without forking; module ordering & enable/disable are documented and predictable | Decide on a long-term module naming/ordering convention | — |
+| P4 — Distribution & updates | ⏳ | Optional installer is idempotent; changelog + tags exist; upgrades are repeatable | Document installer usage + add smoke coverage | — |
+| P5 — Polish & nice-to-haves | ✅ | Optional features remain opt-in and do not slow shell startup noticeably | (done) `extract` completion + safer installer backups + optional `--install-dir` deployment | — |
 
 ## Priorities (P1 → P5)
 
@@ -149,9 +149,9 @@ This is the ordered list of blockers/risks. Any milestone marked ⛔ should refe
 
 ### Work items (P3)
 
-- [ ] **P3.1** Document loader behavior in `.bash_profile` (ordering rules, failure behavior, expected environment).
-- [ ] **P3.3** Add module toggling mechanism (simple allowlist/denylist via env vars).
-- [ ] **P3.4** Add a troubleshooting section for “module X broke my shell startup”.
+- [x] **P3.1** Document loader behavior in `.bash_profile` (ordering rules, failure behavior, expected environment).
+- [x] **P3.3** Add module toggling mechanism (simple allowlist/denylist via env vars).
+- [x] **P3.4** Add a troubleshooting section for “module X broke my shell startup”.
 
 ### Blockers (P3)
 
@@ -167,16 +167,18 @@ This is the ordered list of blockers/risks. Any milestone marked ⛔ should refe
 
 - Optional installer script (idempotent) that:
   - installs a symlink to `~/.bash_profile` (with backup)
-  - runs bootstrap scripts
+  - supports `--dry-run`
+  - can optionally run bootstrap scripts
 
 ### Work items (P4)
 
-- [ ] **P4.1** Define install/upgrade contract (what changes, what gets backed up, what is opt-in).
-- [ ] **P4.2** Write `scripts/install.sh`
+- [x] **P4.1** Define install/upgrade contract (what changes, what gets backed up, what is opt-in).
+- [x] **P4.2** Write `scripts/install.sh`
+- [x] **P4.3** Document installer usage in `readme.md` and add a smoke test for `--dry-run`.
 
 ### Blockers (P4)
 
-- B-005
+- (none)
 
 ---
 
@@ -192,5 +194,6 @@ This is the ordered list of blockers/risks. Any milestone marked ⛔ should refe
 
 ### Ideas (pick after P1–P4)
 
-- Shell completion (where feasible) for `extract`, `sysinfo`, `netinfo`.
-- Additional helpers (git shortcuts, docker/k8s context, “safe rm”, etc.) as opt-in modules.
+- Shell completion (where feasible) for `extract`
+- installer to copy old bash_profile to backup location with better naming
+- installer to to install all scripts and bash_profile to users home directory

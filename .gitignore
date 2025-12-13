@@ -1,0 +1,5 @@
+# User-local overrides (do not commit personal tweaks)
+profile.d/local.sh
+
+# Cache/artifacts
+.DS_Store
