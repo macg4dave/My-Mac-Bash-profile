@@ -487,8 +487,24 @@ _sysinfo_term_cols() {
 }
 
 _sysinfo_visible_len() {
-    # Length excluding common ANSI SGR sequences.
-    printf '%s' "$1" | awk '{gsub(/\033\[[0-9;]*[A-Za-z]/,""); print length($0)}'
+    # Length excluding common terminal escape sequences (CSI/OSC/charset selects).
+    #
+    # Notes:
+    # - `tput sgr0` commonly includes `ESC(B` (G0 charset select) in addition to SGR.
+    # - We strip OSC sequences so hyperlinks/window-title updates don't affect padding.
+    printf '%s' "$1" | awk '
+      {
+        s=$0
+        # CSI: ESC [ ... final-byte
+        gsub(/\033\[[0-9;?]*[ -/]*[@-~]/,"",s)
+        # OSC: ESC ] ... BEL
+        gsub(/\033\][^\007]*\007/,"",s)
+        # OSC: ESC ] ... ESC \
+        gsub(/\033\][^\033]*\033\\/,"",s)
+        # Charset/G0-G3 selects: ESC ( X or ESC ) X
+        gsub(/\033[\(\)][0-9A-Za-z]/,"",s)
+        print length(s)
+      }'
 }
 
 _sysinfo_fmt_uptime_short() {

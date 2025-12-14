@@ -36,7 +36,7 @@ All helpers listed above agree to the following rules (unless noted):
 | Helper | `--kv` | `--plain`/`--no-color` | additional notes |
 | --- | --- | --- | --- |
 | `sysinfo` | ✅ (see “`--kv` key order” below) | `--plain`/`--no-color` disable ANSI styling; `--color` forces it | `--box` / `--table` / `--stacked` choose layout |
-| `netinfo` | ✅ (see below) | `--plain`/`--no-color` accepted even though plain is the default | `--color` accepted for contract consistency |
+| `netinfo` | ✅ (see below) | `--plain`/`--no-color` accepted even though plain is the default | `--box` / `--stacked` choose layout; `--color` enables ANSI styling |
 | `extract` | ❌ | ❌ | accepts `-v/--verbose`, `-l`, `-f` as documented |
 | `flushdns` | ❌ | ❌ | offers `--dry-run`, `--restart`, `--status` |
 | `jd` / `jdir` | ❌ | ❌ | support `--dry-run` and `--help` only |
@@ -89,7 +89,7 @@ This table summarizes each helper’s CLI surface, current differences, and how 
 | Helper | Flags covered | Exit codes | `N/A` semantics | Notes / delta from contract |
 | --- | --- | --- | --- | --- |
 | `sysinfo` | `-h`, `--help`, `--kv`, `--plain`, `--no-color`, `--color`, `--box`, `--table`, `--stacked` | `0`, `1`, `2` | Everywhere a measurement fails | Already compliant; the test suite checks the `--kv` order. |
-| `netinfo` | `-h`, `--help`, `--kv`, `--plain`, `--no-color`, `--color` | `0`, `1`, `2` | Every network field may become `N/A`; `vpn_interfaces` uses `none` when no VPN detected | Already compliant; `tests/helper_contract.sh` enforces `--kv` keys. |
+| `netinfo` | `-h`, `--help`, `--kv`, `--plain`, `--no-color`, `--color`, `--box`, `--stacked` | `0`, `1`, `2` | Every network field may become `N/A`; `vpn_interfaces` uses `none` when no VPN detected | Already compliant; `tests/helper_contract.sh` enforces `--kv` keys. |
 | `extract` | `-h`, `--help`, `-v`, `--verbose`, `-l`, `--list`, `-f`, `--force` | `0`, `1`, `2` | Refuses path traversal unless `--force`, prints `N/A`-style warnings when tools are missing | `extract` is human-only, so the CLI contract focuses on return codes and safety. |
 | `flushdns` | `-h`, `--help`, `--dry-run`, `--restart`, `--status` | `0`, `1`, `2` | If no DNS service is found the helper prints a friendly message and exits `1` | Fast distributions guard ensures no prompts; tests rely on `--help` stability. |
 | `jd` / `jdir` | `-h`, `--help`, `--dry-run`, `--recursive` (jdir via default) | `0`, `1`, `2`, `127` when `wget` missing | When `wget` missing they exit `127` (in line with shell conventions) | They simply wrap `wget`, so contract enforcement is limited to help text + exit codes. |
