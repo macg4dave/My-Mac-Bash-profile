@@ -120,7 +120,7 @@ To customize without committing changes, add one of these files (they are source
 
 - `extract <archive> [dest]` — extract many archive types into a folder (supports `--list`, `--force`, `--verbose`). Includes basic tab completion for flags and paths in interactive Bash.
 - `sysinfo` — show a compact one-line system summary (OS, disk, uptime, load, CPU, RAM, network counters).
-- `netinfo` — show a small network summary (default route/interface, local IP, Wi-Fi SSID when available, VPN interfaces, cached external IP).
+- `netinfo` — show a small network summary (default route/interface, local IP, VPN interfaces, cached external IP).
 - `flushdns` — best-effort DNS cache flush helper (macOS + common Linux setups).
 - `jdir` / `jd` — friendly wrappers around `wget` (recursive directory download vs. single URL resume).
 - `cdf` (macOS) — `cd` to the front Finder window.
@@ -163,7 +163,6 @@ Keys (stable order):
 - `default_interface`
 - `gateway`
 - `local_ip`
-- `wifi_ssid`
 - `vpn_interfaces` (`none` if none detected)
 - `external_ip` (cached; set `NETINFO_EXTERNAL_IP=0` to disable lookup)
 - `external_hostname` (cached; set `NETINFO_EXTERNAL_IP=0` to disable lookup)
@@ -180,7 +179,6 @@ Keys (stable order):
 | `IS_LINUX` | auto | Set by the profile to `true`/`false` based on `uname -s` (intended as a read-only flag). |
 | `NETINFO_EXTERNAL_IP` | `1` | If set to `0`, `netinfo` will skip external IP lookup (useful for offline environments). |
 | `NETINFO_EXTERNAL_IP_TTL` | `300` | External IP cache TTL in seconds for `netinfo`. |
-| `NETINFO_WIFI_DEVICE` | `en0` | macOS Wi‑Fi device used by `netinfo` (only relevant on macOS). |
 
 ## Notes
 

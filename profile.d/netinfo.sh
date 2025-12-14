@@ -196,105 +196,6 @@ _netinfo_local_ip_macos() {
     fi
 }
 
-_netinfo_wifi_ssid_linux() {
-    # Distinguish between:
-    # - disconnected: Wi-Fi hardware exists but not associated (or SSID cannot be determined)
-    # - N/A: Wi-Fi not present (best-effort)
-    if has_cmd iwgetid; then
-        local ssid=""
-        ssid="$(iwgetid -r 2>/dev/null | tr -d '\r\n')"
-        if [[ -n "$ssid" ]]; then
-            echo "$ssid"
-        else
-            echo "disconnected"
-        fi
-        return 0
-    fi
-
-    if [[ -d /sys/class/net ]]; then
-        # If any wireless sysfs marker exists, treat Wi-Fi as present.
-        if ls -d /sys/class/net/*/wireless >/dev/null 2>&1; then
-            echo "disconnected"
-            return 0
-        fi
-    fi
-    echo "N/A"
-}
-
-_netinfo_wifi_ssid_macos() {
-    # Prefer networksetup, but don't assume en0 is Wi‑Fi (it isn't on all Macs).
-    if has_cmd networksetup; then
-        local forced_device="${NETINFO_WIFI_DEVICE:-}"
-        local device out ssid
-        local any_wifi_device=0
-
-        if [[ -n "$forced_device" ]]; then
-            any_wifi_device=1
-            out="$(networksetup -getairportnetwork "$forced_device" 2>/dev/null || true)"
-            if [[ "$out" =~ You[[:space:]]are[[:space:]]not[[:space:]]associated ]]; then
-                echo "disconnected"
-                return 0
-            fi
-            ssid="$(printf '%s' "$out" | awk -F': ' 'NF>=2 {print $2; exit}' 2>/dev/null || true)"
-            if [[ -n "$ssid" ]]; then
-                echo "$ssid"
-                return 0
-            fi
-            # Device exists but we can't parse; treat as disconnected.
-            [[ -n "$out" ]] && { echo "disconnected"; return 0; }
-        else
-            # Scan all Wi‑Fi/AirPort devices and return the SSID from the first
-            # one that is actually associated.
-            while IFS= read -r device; do
-                [[ -n "$device" ]] || continue
-                any_wifi_device=1
-                out="$(networksetup -getairportnetwork "$device" 2>/dev/null || true)"
-                if [[ "$out" =~ You[[:space:]]are[[:space:]]not[[:space:]]associated ]]; then
-                    continue
-                fi
-
-                ssid="$(printf '%s' "$out" | awk -F': ' 'NF>=2 {print $2; exit}' 2>/dev/null || true)"
-                if [[ -n "$ssid" ]]; then
-                    echo "$ssid"
-                    return 0
-                fi
-
-                # If we got *some* output but couldn't parse, assume it's connected.
-                if [[ -n "$out" ]]; then
-                    echo "disconnected"
-                    return 0
-                fi
-            done < <(
-                networksetup -listallhardwareports 2>/dev/null | awk '
-                    $0 ~ /^Hardware Port: (Wi-Fi|AirPort)$/ { found=1; next }
-                    found && $0 ~ /^Device: / { print $2; found=0 }
-                '
-            )
-
-            if [[ "$any_wifi_device" -eq 1 ]]; then
-                echo "disconnected"
-                return 0
-            fi
-        fi
-    fi
-
-    # Fallback: use the private `airport` tool if present.
-    local airport_bin
-    airport_bin="/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
-    if [[ -x "$airport_bin" ]]; then
-        local ssid
-        ssid="$("$airport_bin" -I 2>/dev/null | awk -F': ' '/^ *SSID:/ {print $2; exit}' | tr -d '\r\n')"
-        if [[ -n "$ssid" ]]; then
-            echo "$ssid"
-        else
-            echo "disconnected"
-        fi
-        return 0
-    fi
-
-    echo "N/A"
-}
-
 _netinfo_vpn_ifaces_linux() {
     if has_cmd ip; then
         ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | grep -E '^(tun|tap|wg|ppp|tailscale)[0-9]*$' || true
@@ -312,7 +213,7 @@ _netinfo_join_lines() {
     awk 'NR==1{printf "%s",$0; next} {printf ",%s",$0} END{print ""}'
 }
 
-_NETINFO_KV_KEYS=(local_hostname default_interface gateway local_ip wifi_ssid vpn_interfaces external_ip external_hostname city)
+_NETINFO_KV_KEYS=(local_hostname default_interface gateway local_ip vpn_interfaces external_ip external_hostname city)
 
 _netinfo_is_tty() {
     [[ -t 1 ]]
@@ -559,13 +460,6 @@ _netinfo_render_box() {
     _netinfo_box_print_row "$row_bg" "Local IP" "$value" "$label_w" "$value_w" "$v"
     row=$((row + 1))
 
-    if [[ "$ssid" != "N/A" ]]; then
-        row_bg="$(_netinfo_box_row_bg "$row")"
-        value="$(_netinfo_style_value "$row_bg" "$ssid" value)"
-        _netinfo_box_print_row "$row_bg" "Wi-Fi" "$value" "$label_w" "$value_w" "$v"
-        row=$((row + 1))
-    fi
-
     row_bg="$(_netinfo_box_row_bg "$row")"
     # VPN may be long; wrap it.
     local vpn_line first=1
@@ -611,9 +505,6 @@ _netinfo_render_stacked() {
         printf '%sDefault interface%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$iface"
         printf '%sGateway%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$gw"
         printf '%sLocal IP%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$lip"
-        if [[ "$ssid" != "N/A" ]]; then
-            printf '%sWi-Fi SSID%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$ssid"
-        fi
         printf '%sVPN interfaces%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$vpn"
         printf '%sExternal IP (cached)%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$ext"
         printf '%sExternal Hostname (cached)%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$ehost"
@@ -625,9 +516,6 @@ _netinfo_render_stacked() {
     echo "Default interface: $iface"
     echo "Gateway: $gw"
     echo "Local IP: $lip"
-    if [[ "$ssid" != "N/A" ]]; then
-        echo "Wi-Fi SSID: $ssid"
-    fi
     echo "VPN interfaces: $vpn"
     echo "External IP (cached): $ext"
     echo "External Hostname (cached): $ehost"
@@ -689,27 +577,24 @@ USAGE
         shift
     done
 
-    local platform iface gw lip ssid ext vpn lhost ehost city
+    local platform iface gw lip ext vpn lhost ehost city
     platform="$(uname -s 2>/dev/null || echo 'Unknown')"
 
     if [[ "$platform" == "Linux" ]]; then
         iface="$(_netinfo_default_iface_linux)"
         gw="$(_netinfo_default_gw_linux)"
         lip="$(_netinfo_local_ip_linux)"
-        ssid="$(_netinfo_wifi_ssid_linux)"
         vpn="$(_netinfo_vpn_ifaces_linux | _netinfo_join_lines 2>/dev/null)"
     elif [[ "$platform" == "Darwin" ]]; then
         iface="$(_netinfo_default_iface_macos)"
         gw="$(_netinfo_default_gw_macos)"
         lip="$(_netinfo_local_ip_macos)"
-        ssid="$(_netinfo_wifi_ssid_macos)"
         vpn="$(_netinfo_vpn_ifaces_macos | _netinfo_join_lines 2>/dev/null)"
     fi
 
     iface="${iface:-N/A}"
     gw="${gw:-N/A}"
     lip="${lip:-N/A}"
-    ssid="${ssid:-N/A}"
     vpn="${vpn:-none}"
     lhost="$(_netinfo_local_hostname)"
     ext="$(_netinfo_external_ip)"
@@ -732,7 +617,6 @@ USAGE
                 default_interface) value="$iface" ;;
                 gateway) value="$gw" ;;
                 local_ip) value="$lip" ;;
-                wifi_ssid) value="$ssid" ;;
                 vpn_interfaces) value="$vpn" ;;
                 external_ip) value="$ext" ;;
                 external_hostname) value="$ehost" ;;

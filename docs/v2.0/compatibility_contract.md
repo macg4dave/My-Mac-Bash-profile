@@ -108,7 +108,6 @@ Not required for sourcing; only affects helper richness.
 
 - `iproute2` (provides `ip`) for `netinfo`.
 - `curl` or `wget` for `netinfo` external IP lookup.
-- `wireless-tools` (provides `iwgetid`) for Wi-Fi SSID on some systems.
 - `p7zip-full` (provides `7z`) for `.7z` extraction support.
 - `unrar` may be in non-free repositories depending on Debian configuration.
 
@@ -123,7 +122,6 @@ Not required for sourcing; only affects helper richness.
 
 - `iproute` (provides `ip`) for `netinfo` (typically installed).
 - `curl` is usually installed; `wget` may or may not be.
-- Wi-Fi SSID helpers vary by setup (NetworkManager tooling vs `iwgetid`); helpers should degrade to `N/A`.
 - `p7zip` provides `7z` support; `unrar` availability depends on enabled repos.
 
 ## What counts as a breaking change
