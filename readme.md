@@ -223,6 +223,14 @@ netinfo --kv
 ```
 
 Outputs stable `key=value` pairs.
+The exact keys and their ordering are listed in `docs/v2.0/helper_contract.md`, so scripts can rely on the format.
+
+For example, capture the local IP without needing JSON:
+
+```bash
+local_ip=$(netinfo --kv | awk -F= '/^local_ip=/ {print $2}')
+echo "Local IP: $local_ip"
+```
 
 ---
 
@@ -239,8 +247,8 @@ Both support `--dry-run`.
 
 ## Developer notes
 
-* Dev docs: `readme_for_dev.md`
-* Roadmap: `roadmap.md`
+* Dev docs: `docs/v1.0/readme_for_dev.md`
+* Roadmap: `docs/v2.0/roadmap.md`
 * Lint/tests:
 
 ```bash

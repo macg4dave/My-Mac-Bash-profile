@@ -383,6 +383,95 @@ detect_primary_interface() {
     net_int_linux="${iface:-eth0}"
 }
 
+# Terminal UI helpers (tput/terminfo-backed).
+_sysinfo_is_tty() {
+    [[ -t 1 ]]
+}
+
+_sysinfo_tput() {
+    # Best-effort: emit nothing if terminfo/capability isn't available.
+    _sysinfo_has_cmd tput || return 1
+    [[ "${TERM:-}" != "dumb" ]] || return 1
+    tput "$@" 2>/dev/null || return 1
+}
+
+_sysinfo_supports_utf8() {
+    local loc="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
+    [[ "$loc" =~ [Uu][Tt][Ff]-?8 ]]
+}
+
+# Style variables set by _sysinfo_style_init().
+_SYSINFO_SGR_RESET=""
+_SYSINFO_SGR_TITLE=""
+_SYSINFO_SGR_LABEL=""
+_SYSINFO_SGR_VALUE=""
+_SYSINFO_SGR_BORDER=""
+_SYSINFO_SGR_SUBLABEL=""
+_SYSINFO_SGR_USED=""
+_SYSINFO_SGR_FREE=""
+_SYSINFO_SGR_MUTED=""
+_SYSINFO_SGR_ROW_BG1=""
+_SYSINFO_SGR_ROW_BG2=""
+
+_sysinfo_tput_colors() {
+    local c
+    c="$(_sysinfo_tput colors || echo 0)"
+    [[ "$c" =~ ^[0-9]+$ ]] || c=0
+    echo "$c"
+}
+
+_sysinfo_style_init() {
+    local use_colour="${1:-1}"
+
+    _SYSINFO_SGR_RESET=""
+    _SYSINFO_SGR_TITLE=""
+    _SYSINFO_SGR_LABEL=""
+    _SYSINFO_SGR_VALUE=""
+    _SYSINFO_SGR_BORDER=""
+    _SYSINFO_SGR_SUBLABEL=""
+    _SYSINFO_SGR_USED=""
+    _SYSINFO_SGR_FREE=""
+    _SYSINFO_SGR_MUTED=""
+    _SYSINFO_SGR_ROW_BG1=""
+    _SYSINFO_SGR_ROW_BG2=""
+
+    [[ "$use_colour" == "1" ]] || return 0
+    _sysinfo_is_tty || return 0
+
+    local reset bold dim colors
+    reset="$(_sysinfo_tput sgr0 || true)"
+    bold="$(_sysinfo_tput bold || true)"
+    dim="$(_sysinfo_tput dim || true)"
+    colors="$(_sysinfo_tput_colors)"
+
+    _SYSINFO_SGR_RESET="$reset"
+    if [[ "$colors" -ge 256 ]]; then
+        _SYSINFO_SGR_TITLE="${bold}$(_sysinfo_tput setaf 231 || true)$(_sysinfo_tput setab 24 || true)"
+        _SYSINFO_SGR_LABEL="${bold}$(_sysinfo_tput setaf 220 || true)"
+        _SYSINFO_SGR_VALUE="$(_sysinfo_tput setaf 81 || true)"
+        _SYSINFO_SGR_SUBLABEL="${dim}$(_sysinfo_tput setaf 250 || true)"
+        _SYSINFO_SGR_USED="$(_sysinfo_tput setaf 209 || true)"
+        _SYSINFO_SGR_FREE="$(_sysinfo_tput setaf 114 || true)"
+        _SYSINFO_SGR_MUTED="${dim}$(_sysinfo_tput setaf 245 || true)"
+        _SYSINFO_SGR_BORDER="${dim}$(_sysinfo_tput setaf 33 || true)"
+        _SYSINFO_SGR_ROW_BG1="$(_sysinfo_tput setab 236 || true)"
+        _SYSINFO_SGR_ROW_BG2="$(_sysinfo_tput setab 235 || true)"
+    else
+        local smso
+        smso="$(_sysinfo_tput smso || true)"
+        _SYSINFO_SGR_TITLE="${bold}${smso}$(_sysinfo_tput setaf 6 || true)"
+        _SYSINFO_SGR_LABEL="${bold}$(_sysinfo_tput setaf 3 || true)"
+        _SYSINFO_SGR_VALUE="$(_sysinfo_tput setaf 6 || true)"
+        _SYSINFO_SGR_SUBLABEL="${dim}$(_sysinfo_tput setaf 7 || true)"
+        _SYSINFO_SGR_USED="$(_sysinfo_tput setaf 3 || true)"
+        _SYSINFO_SGR_FREE="$(_sysinfo_tput setaf 2 || true)"
+        _SYSINFO_SGR_MUTED="${dim}$(_sysinfo_tput setaf 7 || true)"
+        _SYSINFO_SGR_BORDER="${dim}$(_sysinfo_tput setaf 4 || true)"
+        _SYSINFO_SGR_ROW_BG1="$smso"
+        _SYSINFO_SGR_ROW_BG2=""
+    fi
+}
+
 # Function to add colors and format the text output
 _sysinfo_term_cols() {
     local cols=""
@@ -427,6 +516,300 @@ _sysinfo_fmt_uptime_short() {
         -e 's/^[[:space:]]+//; s/[[:space:]]+$//'
 }
 
+_sysinfo_repeat() {
+    local ch="$1" count="$2"
+    local i
+    for ((i = 0; i < count; i++)); do
+        printf '%s' "$ch"
+    done
+}
+
+_sysinfo_spaces() {
+    local count="$1"
+    [[ "$count" -gt 0 ]] || count=0
+    printf '%*s' "$count" ""
+}
+
+_sysinfo_pad_right() {
+    local text="$1" width="$2"
+    local vis pad
+    vis="$(_sysinfo_visible_len "$text")"
+    pad=$((width - vis))
+    [[ "$pad" -gt 0 ]] || pad=0
+    printf '%s%*s' "$text" "$pad" ""
+}
+
+_sysinfo_box_row_bg() {
+    local idx="$1"
+    if (( idx % 2 == 0 )); then
+        printf '%s' "${_SYSINFO_SGR_ROW_BG1}"
+    else
+        printf '%s' "${_SYSINFO_SGR_ROW_BG2}"
+    fi
+}
+
+_sysinfo_box_span() {
+    local row_bg="$1" sgr="$2" text="$3"
+    printf '%s%s%s%s' "${_SYSINFO_SGR_RESET}" "${row_bg}" "${sgr}" "${text}"
+}
+
+_sysinfo_box_fmt_pair() {
+    local row_bg="$1" k="$2" v="$3"
+    [[ -n "$v" ]] || v="N/A"
+    printf '%s%s%s' \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "${k} ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "$v")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "")"
+}
+
+_sysinfo_box_fmt_used_total_free() {
+    local row_bg="$1" used="$2" total="$3" free="$4"
+    [[ -n "$used" ]] || used="N/A"
+    [[ -n "$total" ]] || total="N/A"
+    [[ -n "$free" ]] || free="N/A"
+    printf '%s%s%s%s%s%s%s%s%s' \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "Used ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_USED" "$used")" \
+        "$(_sysinfo_box_span "$row_bg" "" "  ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "Total ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "$total")" \
+        "$(_sysinfo_box_span "$row_bg" "" "  ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "Free ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_FREE" "$free")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "")"
+}
+
+_sysinfo_box_fmt_cpu() {
+    local row_bg="$1" u="$2" s="$3" i="$4"
+    [[ -n "$u" ]] || u="N/A"
+    [[ -n "$s" ]] || s="N/A"
+    [[ -n "$i" ]] || i="N/A"
+    printf '%s%s%s%s%s%s%s%s%s' \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "User ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_USED" "${u}%")" \
+        "$(_sysinfo_box_span "$row_bg" "" "  ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "Sys ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_USED" "${s}%")" \
+        "$(_sysinfo_box_span "$row_bg" "" "  ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "Idle ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_FREE" "${i}%")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "")"
+}
+
+_sysinfo_box_fmt_net() {
+    local row_bg="$1" rx="$2" tx="$3"
+    [[ -n "$rx" ]] || rx="N/A"
+    [[ -n "$tx" ]] || tx="N/A"
+    printf '%s%s%s%s%s%s' \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "RX ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_FREE" "$rx")" \
+        "$(_sysinfo_box_span "$row_bg" "" "  ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "TX ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_USED" "$tx")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "")"
+}
+
+_sysinfo_box_fmt_load() {
+    local row_bg="$1" raw="$2"
+    local a b c
+    a="$(printf '%s' "$raw" | awk -F',' '{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$1); print $1}')"
+    b="$(printf '%s' "$raw" | awk -F',' '{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2}')"
+    c="$(printf '%s' "$raw" | awk -F',' '{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$3); print $3}')"
+    [[ -n "$a" ]] || a="N/A"
+    [[ -n "$b" ]] || b="N/A"
+    [[ -n "$c" ]] || c="N/A"
+    printf '%s%s%s%s%s%s%s%s%s' \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "1m ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "$a")" \
+        "$(_sysinfo_box_span "$row_bg" "" "  ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "5m ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "$b")" \
+        "$(_sysinfo_box_span "$row_bg" "" "  ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_SUBLABEL" "15m ")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "$c")" \
+        "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "")"
+}
+
+_sysinfo_box_print_row() {
+    local row_bg="$1" label="$2" value="$3" label_w="$4" value_w="$5" v_border="$6"
+    local label_pad
+
+    label_pad=$((label_w - ${#label}))
+    [[ "$label_pad" -ge 0 ]] || label_pad=0
+
+    local vis pad
+    vis="$(_sysinfo_visible_len "$value")"
+    pad=$((value_w - vis))
+    [[ "$pad" -ge 0 ]] || pad=0
+
+    # Left border (no row background).
+    printf '%s' "${_SYSINFO_SGR_BORDER}${v_border}${_SYSINFO_SGR_RESET}"
+
+    # Interior (with row background).
+    printf '%s' "$(_sysinfo_box_span "$row_bg" "" " ")"
+    printf '%s' "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_LABEL" "$label")"
+    printf '%s' "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "$(_sysinfo_spaces "$label_pad")")"
+    printf '%s' "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_MUTED" " : ")"
+
+    # Value + explicit padding (do not rely on inherited background state).
+    printf '%s' "$value"
+    printf '%s%*s' "$(_sysinfo_box_span "$row_bg" "$_SYSINFO_SGR_VALUE" "")" "$pad" ""
+
+    printf '%s' "$(_sysinfo_box_span "$row_bg" "" " ")"
+
+    # Right border, then reset so shell prompt isn't affected.
+    printf '%s\n' "${_SYSINFO_SGR_RESET}${_SYSINFO_SGR_BORDER}${v_border}${_SYSINFO_SGR_RESET}"
+}
+
+_sysinfo_pretty_used_total_free() {
+    local used="$1" total="$2" free="$3"
+    [[ -n "$used" ]] || used="N/A"
+    [[ -n "$total" ]] || total="N/A"
+    [[ -n "$free" ]] || free="N/A"
+    printf '%sUsed%s %s%s%s  %sTotal%s %s%s%s  %sFree%s %s%s%s' \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_USED}" "$used" "${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_VALUE}" "$total" "${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_FREE}" "$free" "${_SYSINFO_SGR_RESET}"
+}
+
+_sysinfo_pretty_cpu() {
+    local u="$1" s="$2" i="$3"
+    [[ -n "$u" ]] || u="N/A"
+    [[ -n "$s" ]] || s="N/A"
+    [[ -n "$i" ]] || i="N/A"
+    printf '%sUser%s %s%s%%%s  %sSys%s %s%s%%%s  %sIdle%s %s%s%%%s' \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_USED}" "$u" "${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_USED}" "$s" "${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_FREE}" "$i" "${_SYSINFO_SGR_RESET}"
+}
+
+_sysinfo_pretty_load() {
+    local raw="$1"
+    local a b c
+    a="$(printf '%s' "$raw" | awk -F',' '{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$1); print $1}')"
+    b="$(printf '%s' "$raw" | awk -F',' '{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2}')"
+    c="$(printf '%s' "$raw" | awk -F',' '{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$3); print $3}')"
+    [[ -n "$a" ]] || a="N/A"
+    [[ -n "$b" ]] || b="N/A"
+    [[ -n "$c" ]] || c="N/A"
+    printf '%s1m%s %s%s%s  %s5m%s %s%s%s  %s15m%s %s%s%s' \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_VALUE}" "$a" "${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_VALUE}" "$b" "${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_VALUE}" "$c" "${_SYSINFO_SGR_RESET}"
+}
+
+_sysinfo_pretty_net() {
+    local rx="$1" tx="$2"
+    [[ -n "$rx" ]] || rx="N/A"
+    [[ -n "$tx" ]] || tx="N/A"
+    printf '%sRX%s %s%s%s  %sTX%s %s%s%s' \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_FREE}" "$rx" "${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_SUBLABEL}" "${_SYSINFO_SGR_RESET}" "${_SYSINFO_SGR_USED}" "$tx" "${_SYSINFO_SGR_RESET}"
+}
+
+_sysinfo_wrap() {
+    local text="$1" width="$2"
+    if _sysinfo_has_cmd fold; then
+        # fold handles long words by hard-splitting; good enough for terminal UI.
+        # Always include a trailing newline so downstream `read` loops run.
+        printf '%s\n' "$text" | fold -s -w "$width"
+    else
+        # Fallback: no wrapping.
+        printf '%s\n' "$text"
+    fi
+}
+
+_sysinfo_render_box() {
+    local use_colour="${1:-1}"
+    local cols width inner content_w label_w value_w
+    cols="$(_sysinfo_term_cols)"
+
+    _sysinfo_style_init "$use_colour"
+
+    _sysinfo_is_tty || { _sysinfo_render_segments "$use_colour"; return 0; }
+
+    if [[ "$cols" -lt 60 ]]; then
+        _sysinfo_render_segments "$use_colour"
+        return 0
+    fi
+
+    width="$cols"
+    [[ "$width" -gt 100 ]] && width=100
+    [[ "$width" -ge 40 ]] || { _sysinfo_render_segments "$use_colour"; return 0; }
+
+    inner=$((width - 2))
+    content_w=$((width - 4))
+
+    local tl tr bl br h v
+    if _sysinfo_supports_utf8; then
+        tl="┌" tr="┐" bl="└" br="┘" h="─" v="│"
+    else
+        tl="+" tr="+" bl="+" br="+" h="-" v="|"
+    fi
+
+    # Fixed label width; keep the layout stable.
+    label_w=6
+
+    value_w=$((content_w - label_w - 3))
+    [[ "$value_w" -ge 10 ]] || { _sysinfo_render_segments "$use_colour"; return 0; }
+
+    local title_text=" System Info "
+    local title_len="${#title_text}"
+    local rem=$((inner - title_len))
+    local left=$((rem / 2))
+    local right=$((rem - left))
+
+    printf '%s%s%s%s%s\n' \
+        "${_SYSINFO_SGR_BORDER}${tl}${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_BORDER}$(_sysinfo_repeat "$h" "$left")${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_TITLE}${title_text}${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_BORDER}$(_sysinfo_repeat "$h" "$right")${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_BORDER}${tr}${_SYSINFO_SGR_RESET}"
+
+    local row=0 content
+
+    local row_bg
+
+    row_bg="$(_sysinfo_box_row_bg "$row")"
+    content="$(_sysinfo_box_fmt_pair "$row_bg" "Name" "${os_name:-N/A}")$(_sysinfo_box_span "$row_bg" "" "  ")$(_sysinfo_box_fmt_pair "$row_bg" "Ver" "${os_ver:-N/A}")"
+    _sysinfo_box_print_row "$row_bg" "OS" "$content" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_sysinfo_box_row_bg "$row")"
+    content="$(_sysinfo_box_fmt_used_total_free "$row_bg" "${startup_used:-N/A}" "${startup_size:-N/A}" "${startup_free:-N/A}")"
+    _sysinfo_box_print_row "$row_bg" "Disk" "$content" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_sysinfo_box_row_bg "$row")"
+    content="$(_sysinfo_box_fmt_pair "$row_bg" "Up" "$(_sysinfo_fmt_uptime_short "${uptime_time:-N/A}")")"
+    _sysinfo_box_print_row "$row_bg" "Uptime" "$content" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_sysinfo_box_row_bg "$row")"
+    content="$(_sysinfo_box_fmt_load "$row_bg" "${uptime_load:-N/A}")"
+    _sysinfo_box_print_row "$row_bg" "Load" "$content" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_sysinfo_box_row_bg "$row")"
+    content="$(_sysinfo_box_fmt_cpu "$row_bg" "${cpu_used_user:-N/A}" "${cpu_used_sys:-N/A}" "${cpu_used_idle:-N/A}")"
+    _sysinfo_box_print_row "$row_bg" "CPU" "$content" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_sysinfo_box_row_bg "$row")"
+    content="$(_sysinfo_box_fmt_used_total_free "$row_bg" "${ram_used:-N/A}" "${ram_total:-N/A}" "${ram_free:-N/A}")"
+    _sysinfo_box_print_row "$row_bg" "RAM" "$content" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_sysinfo_box_row_bg "$row")"
+    content="$(_sysinfo_box_fmt_net "$row_bg" "${network_down:-N/A}" "${network_up:-N/A}")"
+    _sysinfo_box_print_row "$row_bg" "Net" "$content" "$label_w" "$value_w" "$v"
+
+    printf '%s%s%s\n' \
+        "${_SYSINFO_SGR_BORDER}${bl}${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_BORDER}$(_sysinfo_repeat "$h" "$inner")${_SYSINFO_SGR_RESET}" \
+        "${_SYSINFO_SGR_BORDER}${br}${_SYSINFO_SGR_RESET}"
+}
+
 _sysinfo_render_segments() {
     local use_colour="${1:-1}"
     local cols sep sep_len
@@ -434,21 +817,17 @@ _sysinfo_render_segments() {
     sep="  "
     sep_len=2
 
-    local c_label="" c_value="" c_reset=""
-    if [[ "$use_colour" == "1" ]]; then
-        c_label=$'\033[33m'
-        c_value=$'\033[36m'
-        c_reset=$'\033[0m'
-    fi
+    _sysinfo_style_init "$use_colour"
+    local c_label="$_SYSINFO_SGR_LABEL" c_value="$_SYSINFO_SGR_VALUE" c_reset="$_SYSINFO_SGR_RESET"
 
     local os disk uptime load cpu ram net
     os="${os_name} ${os_ver}"
-    disk="${startup_name} ${startup_used}/${startup_size} (${startup_free} free)"
+    disk="${startup_name} $(_sysinfo_pretty_used_total_free "$startup_used" "$startup_size" "$startup_free")"
     uptime="$(_sysinfo_fmt_uptime_short "$uptime_time")"
-    load="$uptime_load"
-    cpu="u${cpu_used_user}% s${cpu_used_sys}% i${cpu_used_idle}%"
-    ram="${ram_used}/${ram_total} (${ram_free} free)"
-    net="RX ${network_down} TX ${network_up}"
+    load="$(_sysinfo_pretty_load "$uptime_load")"
+    cpu="$(_sysinfo_pretty_cpu "$cpu_used_user" "$cpu_used_sys" "$cpu_used_idle")"
+    ram="$(_sysinfo_pretty_used_total_free "$ram_used" "$ram_total" "$ram_free")"
+    net="$(_sysinfo_pretty_net "$network_down" "$network_up")"
 
     local segments=(
         "${c_label}OS${c_reset}: ${c_value}${os}${c_reset}"
@@ -488,21 +867,17 @@ _sysinfo_render_segments() {
 
 _sysinfo_render_table() {
     local use_colour="${1:-1}"
-    local c_label="" c_value="" c_reset=""
-    if [[ "$use_colour" == "1" ]]; then
-        c_label=$'\033[33m'
-        c_value=$'\033[36m'
-        c_reset=$'\033[0m'
-    fi
+    _sysinfo_style_init "$use_colour"
+    local c_label="$_SYSINFO_SGR_LABEL" c_value="$_SYSINFO_SGR_VALUE" c_reset="$_SYSINFO_SGR_RESET"
 
     local os disk uptime load cpu ram net
     os="${os_name} ${os_ver}"
-    disk="${startup_name} ${startup_used}/${startup_size} (${startup_free} free)"
+    disk="${startup_name} $(_sysinfo_pretty_used_total_free "$startup_used" "$startup_size" "$startup_free")"
     uptime="$(_sysinfo_fmt_uptime_short "$uptime_time")"
-    load="$uptime_load"
-    cpu="u${cpu_used_user}% s${cpu_used_sys}% i${cpu_used_idle}%"
-    ram="${ram_used}/${ram_total} (${ram_free} free)"
-    net="RX ${network_down} TX ${network_up}"
+    load="$(_sysinfo_pretty_load "$uptime_load")"
+    cpu="$(_sysinfo_pretty_cpu "$cpu_used_user" "$cpu_used_sys" "$cpu_used_idle")"
+    ram="$(_sysinfo_pretty_used_total_free "$ram_used" "$ram_total" "$ram_free")"
+    net="$(_sysinfo_pretty_net "$network_down" "$network_up")"
 
     printf '%s\n' \
         "${c_label}OS${c_reset} | ${c_label}Disk${c_reset} | ${c_label}Uptime${c_reset} | ${c_label}Load${c_reset} | ${c_label}CPU${c_reset} | ${c_label}RAM${c_reset} | ${c_label}Net${c_reset}"
@@ -517,6 +892,9 @@ print_terminal() {
     cols="$(_sysinfo_term_cols)"
 
     case "$layout" in
+        box)
+            _sysinfo_render_box "$use_colour"
+            ;;
         table)
             _sysinfo_render_table "$use_colour"
             ;;
@@ -524,9 +902,9 @@ print_terminal() {
             _sysinfo_render_segments "$use_colour"
             ;;
         auto|*)
-            # Table looks best when it won't wrap.
-            if [[ "$cols" -ge 150 ]]; then
-                _sysinfo_render_table "$use_colour"
+            # Pretty box for interactive sessions; simple wrapped output elsewhere.
+            if _sysinfo_is_tty && _sysinfo_has_cmd tput && [[ "${TERM:-}" != "dumb" ]] && [[ "$cols" -ge 60 ]]; then
+                _sysinfo_render_box "$use_colour"
             else
                 _sysinfo_render_segments "$use_colour"
             fi
@@ -534,36 +912,44 @@ print_terminal() {
     esac
 }
 
-# Main function to collect system information and print it
+_SYSINFO_KV_KEYS=(os os_version boot_volume volume_size volume_used volume_free uptime load_avg cpu_user cpu_sys cpu_idle ram_used ram_free ram_total net_rx net_tx)
+
 _sysinfo_print_kv() {
     # Machine-friendly output: one key=value per line.
-    # Values may contain spaces; callers should parse accordingly.
-    printf '%s=%s\n' os "$os_name"
-    printf '%s=%s\n' os_version "$os_ver"
-    printf '%s=%s\n' boot_volume "$startup_name"
-    printf '%s=%s\n' volume_size "$startup_size"
-    printf '%s=%s\n' volume_used "$startup_used"
-    printf '%s=%s\n' volume_free "$startup_free"
-    printf '%s=%s\n' uptime "$uptime_time"
-    printf '%s=%s\n' load_avg "$uptime_load"
-    printf '%s=%s\n' cpu_user "$cpu_used_user"
-    printf '%s=%s\n' cpu_sys "$cpu_used_sys"
-    printf '%s=%s\n' cpu_idle "$cpu_used_idle"
-    printf '%s=%s\n' ram_used "$ram_used"
-    printf '%s=%s\n' ram_free "$ram_free"
-    printf '%s=%s\n' ram_total "$ram_total"
-    printf '%s=%s\n' net_rx "$network_down"
-    printf '%s=%s\n' net_tx "$network_up"
+    local key value
+    for key in "${_SYSINFO_KV_KEYS[@]}"; do
+        case "$key" in
+            os) value="$os_name" ;; 
+            os_version) value="$os_ver" ;; 
+            boot_volume) value="$startup_name" ;; 
+            volume_size) value="$startup_size" ;; 
+            volume_used) value="$startup_used" ;; 
+            volume_free) value="$startup_free" ;; 
+            uptime) value="$uptime_time" ;; 
+            load_avg) value="$uptime_load" ;; 
+            cpu_user) value="$cpu_used_user" ;; 
+            cpu_sys) value="$cpu_used_sys" ;; 
+            cpu_idle) value="$cpu_used_idle" ;; 
+            ram_used) value="$ram_used" ;; 
+            ram_free) value="$ram_free" ;; 
+            ram_total) value="$ram_total" ;; 
+            net_rx) value="$network_down" ;; 
+            net_tx) value="$network_up" ;; 
+            *) value="N/A" ;; 
+        esac
+        printf '%s=%s\n' "$key" "${value:-N/A}"
+    done
 }
 
 sysinfo_usage() {
     cat <<'USAGE'
-Usage: sysinfo [--help] [--plain|--no-color] [--kv] [--table|--stacked]
+Usage: sysinfo [--help] [--plain|--no-color] [--kv] [--box|--table|--stacked]
 
 Human output is the default.
 
 Options:
     -h, --help        Show this help and exit.
+    --box             Pretty boxed output (uses terminfo via `tput` when available).
     --table, --wide   Force a single-row table (best on wide terminals).
     --stacked, --compact
                      Force a wrapped multi-line layout (best on narrow terminals).
@@ -572,7 +958,7 @@ Options:
     --kv              Machine-readable key=value output (one per line).
 
 Environment:
-    SYSINFO_LAYOUT    One of: auto, table, stacked. (Default: auto)
+    SYSINFO_LAYOUT    One of: auto, box, table, stacked. (Default: auto)
 
 Exit codes:
     0 success
@@ -628,6 +1014,9 @@ sysinfo() {
                 ;;
             --stacked|--compact)
                 layout="stacked"
+                ;;
+            --box)
+                layout="box"
                 ;;
             --plain|--no-color)
                 colour_mode="off"

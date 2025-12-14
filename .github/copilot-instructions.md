@@ -31,6 +31,8 @@ When adding or modifying functions that use non-portable commands:
 - Avoid breaking changes to existing functionality without clear deprecation paths.
 - Do not introduce heavy dependencies that complicate setup or usage.
 - Avoid hardcoding OS-specific paths; use environment variables or detection logic instead.
+- adding large new features that significantly increase startup time or complexity without prior discussion.
+- adding new flags without asking if they fit the existing helper contract (see `docs/v2.0/helper_contract.md`).
 
 ## When in doubt
 - Refer to existing patterns in the codebase for consistency.

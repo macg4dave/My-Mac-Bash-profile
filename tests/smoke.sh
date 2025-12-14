@@ -69,6 +69,18 @@ echo "$netinfo_script_kv" | grep -q '^external_ip=' || { echo "netinfo.sh --kv m
 # Some environments may not have all optional tools; sysinfo should still print.
 sysinfo >/dev/null
 
+# Ensure sysinfo produces human output (not empty).
+sysinfo_human="$(sysinfo --plain)"
+if [[ -z "${sysinfo_human//[[:space:]]/}" ]]; then
+  echo "sysinfo --plain produced no output" >&2
+  exit 1
+fi
+echo "$sysinfo_human" | grep -Eq '(^|[[:space:]])OS[:[:space:]]' || {
+  echo "sysinfo --plain output missing OS field" >&2
+  printf '%s\n' "$sysinfo_human" >&2
+  exit 1
+}
+
 # Ensure sysinfo machine output works.
 sysinfo_kv="$(sysinfo --kv)"
 echo "$sysinfo_kv" | grep -q '^os=' || { echo "sysinfo --kv missing os=" >&2; exit 1; }
@@ -82,6 +94,17 @@ echo "$sysinfo_script_kv" | grep -q '^os=' || { echo "sysinfo.sh --kv missing os
 echo "$sysinfo_script_kv" | grep -q '^ram_total=' || { echo "sysinfo.sh --kv missing ram_total=" >&2; exit 1; }
 echo "$sysinfo_script_kv" | grep -q '^net_rx=' || { echo "sysinfo.sh --kv missing net_rx=" >&2; exit 1; }
 echo "$sysinfo_script_kv" | grep -q '^net_tx=' || { echo "sysinfo.sh --kv missing net_tx=" >&2; exit 1; }
+
+sysinfo_script_human="$(bash "$repo_root/profile.d/sysinfo.sh" --plain)"
+if [[ -z "${sysinfo_script_human//[[:space:]]/}" ]]; then
+  echo "sysinfo.sh --plain produced no output" >&2
+  exit 1
+fi
+echo "$sysinfo_script_human" | grep -Eq '(^|[[:space:]])OS[:[:space:]]' || {
+  echo "sysinfo.sh --plain output missing OS field" >&2
+  printf '%s\n' "$sysinfo_script_human" >&2
+  exit 1
+}
 
 # Ensure extract help works.
 extract --help >/dev/null

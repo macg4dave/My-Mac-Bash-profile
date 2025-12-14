@@ -51,31 +51,31 @@ _netinfo_external_ip() {
 
 _netinfo_default_iface_linux() {
     if has_cmd ip; then
-        ip route 2>/dev/null | awk '/^default/ {print $5; exit}'
+        ip route 2>/dev/null | awk '/^default/ {print $5; exit}' 2>/dev/null || true
     fi
 }
 
 _netinfo_default_gw_linux() {
     if has_cmd ip; then
-        ip route 2>/dev/null | awk '/^default/ {print $3; exit}'
+        ip route 2>/dev/null | awk '/^default/ {print $3; exit}' 2>/dev/null || true
     fi
 }
 
 _netinfo_default_iface_macos() {
     if has_cmd route; then
-        route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}'
+        route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}' 2>/dev/null || true
     fi
 }
 
 _netinfo_default_gw_macos() {
     if has_cmd route; then
-        route -n get default 2>/dev/null | awk '/gateway:/{print $2; exit}'
+        route -n get default 2>/dev/null | awk '/gateway:/{print $2; exit}' 2>/dev/null || true
     fi
 }
 
 _netinfo_local_ip_linux() {
     if has_cmd ip; then
-        ip -o -4 addr show scope global 2>/dev/null | awk '{print $4}' | head -n 1
+        ip -o -4 addr show scope global 2>/dev/null | awk '{print $4}' 2>/dev/null | head -n 1 || true
     fi
 }
 
@@ -95,7 +95,7 @@ _netinfo_wifi_ssid_linux() {
 
 _netinfo_wifi_ssid_macos() {
     if has_cmd networksetup; then
-        networksetup -getairportnetwork "${NETINFO_WIFI_DEVICE:-en0}" 2>/dev/null | awk -F': ' '{print $2}'
+        networksetup -getairportnetwork "${NETINFO_WIFI_DEVICE:-en0}" 2>/dev/null | awk -F': ' '{print $2}' 2>/dev/null || true
     fi
 }
 
@@ -115,6 +115,8 @@ _netinfo_join_lines() {
     # Join stdin lines with commas (no trailing comma).
     awk 'NR==1{printf "%s",$0; next} {printf ",%s",$0} END{print ""}'
 }
+
+_NETINFO_KV_KEYS=(os default_interface gateway local_ip wifi_ssid vpn_interfaces external_ip)
 
 netinfo() {
     local output_mode="human"
@@ -183,13 +185,20 @@ USAGE
     ext="$(_netinfo_external_ip)"
 
     if [[ "$output_mode" == "kv" ]]; then
-        printf '%s=%s\n' os "$os"
-        printf '%s=%s\n' default_interface "$iface"
-        printf '%s=%s\n' gateway "$gw"
-        printf '%s=%s\n' local_ip "$lip"
-        printf '%s=%s\n' wifi_ssid "$ssid"
-        printf '%s=%s\n' vpn_interfaces "$vpn"
-        printf '%s=%s\n' external_ip "$ext"
+        local key value
+        for key in "${_NETINFO_KV_KEYS[@]}"; do
+            case "$key" in
+                os) value="$os" ;;
+                default_interface) value="$iface" ;;
+                gateway) value="$gw" ;;
+                local_ip) value="$lip" ;;
+                wifi_ssid) value="$ssid" ;;
+                vpn_interfaces) value="$vpn" ;;
+                external_ip) value="$ext" ;;
+                *) value="N/A" ;;
+            esac
+            printf '%s=%s\n' "$key" "${value:-N/A}"
+        done
         return 0
     fi
 

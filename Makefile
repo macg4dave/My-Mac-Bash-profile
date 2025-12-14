@@ -16,3 +16,7 @@ lint:
 
 test:
 	@bash tests/smoke.sh
+	@bash tests/perf-startup.sh
+	@bash tests/safe-source.sh
+	@bash tests/missing-deps.sh
+	@bash tests/helper_contract.sh
