@@ -385,6 +385,7 @@ case "$bootstrap" in
     ;;
 esac
 
+args=()
 case "$bootstrap" in
   none)
     ;;
@@ -393,8 +394,14 @@ case "$bootstrap" in
       args=()
       [[ "$full" -eq 1 ]] && args+=("--full")
       [[ "$dry_run" -eq 1 ]] && args+=("--dry-run")
-      log "Running bootstrap (linux): scripts/bootstrap-linux.sh ${args[*]}"
-      run bash "$repo_root/scripts/bootstrap-linux.sh" "${args[@]}"
+      args_display="${args[*]:-}"
+      [[ -n "$args_display" ]] && args_display=" $args_display"
+      log "Running bootstrap (linux): scripts/bootstrap-linux.sh${args_display}"
+      if ((${#args[@]})); then
+        run bash "$repo_root/scripts/bootstrap-linux.sh" "${args[@]}"
+      else
+        run bash "$repo_root/scripts/bootstrap-linux.sh"
+      fi
     else
       echo "bootstrap-linux.sh not found or not readable" >&2
       exit 1
@@ -404,8 +411,14 @@ case "$bootstrap" in
     if [[ -r "$repo_root/scripts/bootstrap-macos.sh" ]]; then
       args=()
       [[ "$dry_run" -eq 1 ]] && args+=("--dry-run")
-      log "Running bootstrap (macos): scripts/bootstrap-macos.sh ${args[*]}"
-      run bash "$repo_root/scripts/bootstrap-macos.sh" "${args[@]}"
+      args_display="${args[*]:-}"
+      [[ -n "$args_display" ]] && args_display=" $args_display"
+      log "Running bootstrap (macos): scripts/bootstrap-macos.sh${args_display}"
+      if ((${#args[@]})); then
+        run bash "$repo_root/scripts/bootstrap-macos.sh" "${args[@]}"
+      else
+        run bash "$repo_root/scripts/bootstrap-macos.sh"
+      fi
     else
       echo "bootstrap-macos.sh not found or not readable" >&2
       exit 1
