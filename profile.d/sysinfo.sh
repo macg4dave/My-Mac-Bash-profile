@@ -301,9 +301,21 @@ linux_get_network() {
         network_up="N/A"
         return 0
     fi
-    network_down="$(grep "$net_int_linux" /proc/net/dev 2>/dev/null | awk '{print $2}' 2>/dev/null || echo 'N/A')"
-    network_up="$(grep "$net_int_linux" /proc/net/dev 2>/dev/null | awk '{print $10}' 2>/dev/null || echo 'N/A')"
-    
+
+    # Ensure we have a valid interface present in /proc/net/dev.
+    if [[ -z "${net_int_linux:-}" ]] || ! awk -v iface="$net_int_linux" 'BEGIN{ok=0} NR>2 && $1==iface":"{ok=1} END{exit ok?0:1}' /proc/net/dev 2>/dev/null; then
+        net_int_linux="$(awk 'NR>2 {gsub(":","",$1); if ($1 != "lo") {print $1; exit}}' /proc/net/dev 2>/dev/null || echo '')"
+    fi
+
+    if [[ -z "${net_int_linux:-}" ]]; then
+        network_down="N/A"
+        network_up="N/A"
+        return 0
+    fi
+
+    network_down="$(awk -v iface="$net_int_linux" 'NR>2 && $1==iface":" {print $2; exit}' /proc/net/dev 2>/dev/null || echo 'N/A')"
+    network_up="$(awk -v iface="$net_int_linux" 'NR>2 && $1==iface":" {print $10; exit}' /proc/net/dev 2>/dev/null || echo 'N/A')"
+
     # Convert the byte counts to MB/s
     network_down=$(convert_to_mbps "$network_down")
     network_up=$(convert_to_mbps "$network_up")
@@ -360,47 +372,166 @@ linux_get_uptime() {
 
 # Function to detect the primary network interface for Linux
 detect_primary_interface() {
-    if command -v ip >/dev/null 2>&1; then
-        net_int_linux=$(ip route | grep '^default' | awk '{print $5}' 2>/dev/null || echo "eth0")
-    else
-        net_int_linux="eth0"
+    local iface=""
+    if _sysinfo_has_cmd ip; then
+        iface="$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}' 2>/dev/null || echo '')"
     fi
+    # Fallback for restricted environments where `ip` can't query netlink.
+    if [[ -z "$iface" && -r /proc/net/route ]]; then
+        iface="$(awk '$2 == "00000000" {print $1; exit}' /proc/net/route 2>/dev/null || echo '')"
+    fi
+    net_int_linux="${iface:-eth0}"
 }
 
 # Function to add colors and format the text output
-add_colours() {
-    local use_colour="${1:-1}"
-    local colour_blue=""
-    local colour_yellow=""
-    local colour_reset=""
-    if [[ "$use_colour" == "1" ]]; then
-        colour_blue="\033[36m"
-        colour_yellow="\033[33m"
-        colour_reset="\033[0m"
+_sysinfo_term_cols() {
+    local cols=""
+    if [[ -n "${COLUMNS:-}" && "${COLUMNS:-}" =~ ^[0-9]+$ && "${COLUMNS:-}" -gt 0 ]]; then
+        cols="$COLUMNS"
+    elif [[ -t 1 ]] && _sysinfo_has_cmd tput; then
+        cols="$(tput cols 2>/dev/null || echo 80)"
+    else
+        cols="80"
     fi
-
-    # Print the system information with formatted columns
-    echo -e "${colour_yellow}OS *&* Boot Volume *&* Volume Size *&* Used *&* Free *&* Uptime *&* Load Avg *&* CPU User *&* CPU Sys *&* CPU Idle *&* RAM Used *&* RAM Free *&* RAM Total *&* Net RX *&* Net TX${colour_reset}"
-
-    echo -e "${colour_blue}${os_name} ${os_ver} *&* ${startup_name} *&* ${startup_size} *&* ${startup_used} *&* ${startup_free} *&* ${uptime_time} *&* ${uptime_load} *&* ${cpu_used_user}% *&* ${cpu_used_sys}% *&* ${cpu_used_idle}% *&* ${ram_used} *&* ${ram_free} *&* ${ram_total} *&* ${network_down} *&* ${network_up}${colour_reset}"
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols="80"
+    echo "$cols"
 }
 
-# Function to print information to the terminal, centered
+_sysinfo_visible_len() {
+    # Length excluding common ANSI SGR sequences.
+    printf '%s' "$1" | awk '{gsub(/\033\[[0-9;]*[A-Za-z]/,""); print length($0)}'
+}
+
+_sysinfo_fmt_uptime_short() {
+    local s="$1"
+    s="${s#up }"
+    if [[ "$s" =~ ^([0-9]+)[[:space:]]+days?,[[:space:]]*([0-9]+):([0-9]{2})$ ]]; then
+        printf '%sd %sh%sm' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+        return 0
+    fi
+    if [[ "$s" =~ ^([0-9]+):([0-9]{2})$ ]]; then
+        printf '%sh%sm' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+        return 0
+    fi
+
+    # Best-effort normalization for strings like:
+    # - "11 hours, 35 minutes"
+    # - "1 day, 2 hours, 3 minutes"
+    printf '%s' "$s" | sed -E \
+        -e 's/,//g' \
+        -e 's/[[:space:]]+days?/d/g' \
+        -e 's/[[:space:]]+hours?/h/g' \
+        -e 's/[[:space:]]+minutes?/m/g' \
+        -e 's/[[:space:]]+secs?/s/g' \
+        -e 's/[[:space:]]+/ /g' \
+        -e 's/^[[:space:]]+//; s/[[:space:]]+$//'
+}
+
+_sysinfo_render_segments() {
+    local use_colour="${1:-1}"
+    local cols sep sep_len
+    cols="$(_sysinfo_term_cols)"
+    sep="  "
+    sep_len=2
+
+    local c_label="" c_value="" c_reset=""
+    if [[ "$use_colour" == "1" ]]; then
+        c_label=$'\033[33m'
+        c_value=$'\033[36m'
+        c_reset=$'\033[0m'
+    fi
+
+    local os disk uptime load cpu ram net
+    os="${os_name} ${os_ver}"
+    disk="${startup_name} ${startup_used}/${startup_size} (${startup_free} free)"
+    uptime="$(_sysinfo_fmt_uptime_short "$uptime_time")"
+    load="$uptime_load"
+    cpu="u${cpu_used_user}% s${cpu_used_sys}% i${cpu_used_idle}%"
+    ram="${ram_used}/${ram_total} (${ram_free} free)"
+    net="RX ${network_down} TX ${network_up}"
+
+    local segments=(
+        "${c_label}OS${c_reset}: ${c_value}${os}${c_reset}"
+        "${c_label}Disk${c_reset}: ${c_value}${disk}${c_reset}"
+        "${c_label}Uptime${c_reset}: ${c_value}${uptime}${c_reset}"
+        "${c_label}Load${c_reset}: ${c_value}${load}${c_reset}"
+        "${c_label}CPU${c_reset}: ${c_value}${cpu}${c_reset}"
+        "${c_label}RAM${c_reset}: ${c_value}${ram}${c_reset}"
+        "${c_label}Net${c_reset}: ${c_value}${net}${c_reset}"
+    )
+
+    if [[ "$cols" -lt 60 ]]; then
+        local seg
+        for seg in "${segments[@]}"; do
+            printf '%s\n' "$seg"
+        done
+        return 0
+    fi
+
+    local line="" line_len=0 seg seg_len
+    for seg in "${segments[@]}"; do
+        seg_len="$(_sysinfo_visible_len "$seg")"
+        if [[ "$line_len" -eq 0 ]]; then
+            line="$seg"
+            line_len="$seg_len"
+        elif [[ $((line_len + sep_len + seg_len)) -le "$cols" ]]; then
+            line+="$sep$seg"
+            line_len=$((line_len + sep_len + seg_len))
+        else
+            printf '%s\n' "$line"
+            line="$seg"
+            line_len="$seg_len"
+        fi
+    done
+    [[ -n "$line" ]] && printf '%s\n' "$line"
+}
+
+_sysinfo_render_table() {
+    local use_colour="${1:-1}"
+    local c_label="" c_value="" c_reset=""
+    if [[ "$use_colour" == "1" ]]; then
+        c_label=$'\033[33m'
+        c_value=$'\033[36m'
+        c_reset=$'\033[0m'
+    fi
+
+    local os disk uptime load cpu ram net
+    os="${os_name} ${os_ver}"
+    disk="${startup_name} ${startup_used}/${startup_size} (${startup_free} free)"
+    uptime="$(_sysinfo_fmt_uptime_short "$uptime_time")"
+    load="$uptime_load"
+    cpu="u${cpu_used_user}% s${cpu_used_sys}% i${cpu_used_idle}%"
+    ram="${ram_used}/${ram_total} (${ram_free} free)"
+    net="RX ${network_down} TX ${network_up}"
+
+    printf '%s\n' \
+        "${c_label}OS${c_reset} | ${c_label}Disk${c_reset} | ${c_label}Uptime${c_reset} | ${c_label}Load${c_reset} | ${c_label}CPU${c_reset} | ${c_label}RAM${c_reset} | ${c_label}Net${c_reset}"
+    printf '%s\n' \
+        "${c_value}${os}${c_reset} | ${c_value}${disk}${c_reset} | ${c_value}${uptime}${c_reset} | ${c_value}${load}${c_reset} | ${c_value}${cpu}${c_reset} | ${c_value}${ram}${c_reset} | ${c_value}${net}${c_reset}"
+}
+
 print_terminal() {
     local use_colour="${1:-1}"
-    display_center() {
-        columns="$(tput cols 2>/dev/null || echo 80)"
-        while IFS= read -r line; do
-            printf "%*s\n" $(( (${#line} + columns) / 2)) "$line"
-        done
-    }
+    local layout="${2:-auto}"
+    local cols
+    cols="$(_sysinfo_term_cols)"
 
-    # Format and display information
-    if command -v column >/dev/null 2>&1; then
-        add_colours "$use_colour" | column -s "*&*" -t | display_center
-    else
-        add_colours "$use_colour" | display_center
-    fi
+    case "$layout" in
+        table)
+            _sysinfo_render_table "$use_colour"
+            ;;
+        stacked|segments)
+            _sysinfo_render_segments "$use_colour"
+            ;;
+        auto|*)
+            # Table looks best when it won't wrap.
+            if [[ "$cols" -ge 150 ]]; then
+                _sysinfo_render_table "$use_colour"
+            else
+                _sysinfo_render_segments "$use_colour"
+            fi
+            ;;
+    esac
 }
 
 # Main function to collect system information and print it
@@ -427,15 +558,21 @@ _sysinfo_print_kv() {
 
 sysinfo_usage() {
     cat <<'USAGE'
-Usage: sysinfo [--help] [--plain|--no-color] [--kv]
+Usage: sysinfo [--help] [--plain|--no-color] [--kv] [--table|--stacked]
 
 Human output is the default.
 
 Options:
     -h, --help        Show this help and exit.
+    --table, --wide   Force a single-row table (best on wide terminals).
+    --stacked, --compact
+                     Force a wrapped multi-line layout (best on narrow terminals).
     --plain, --no-color
                                      Disable ANSI color.
     --kv              Machine-readable key=value output (one per line).
+
+Environment:
+    SYSINFO_LAYOUT    One of: auto, table, stacked. (Default: auto)
 
 Exit codes:
     0 success
@@ -447,6 +584,7 @@ USAGE
 main() {
     local output_mode="${1:-human}"
     local use_colour="${2:-1}"
+    local layout="${3:-auto}"
     find_os || return 1
 
     if [[ $which_os -eq 1 ]]; then
@@ -467,13 +605,14 @@ main() {
     if [[ "$output_mode" == "kv" ]]; then
         _sysinfo_print_kv
     else
-        print_terminal "$use_colour"
+        print_terminal "$use_colour" "$layout"
     fi
 }
 
 sysinfo() {
     local output_mode="human"
     local colour_mode="auto"
+    local layout="${SYSINFO_LAYOUT:-auto}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -483,6 +622,12 @@ sysinfo() {
                 ;;
             --kv|--key-value)
                 output_mode="kv"
+                ;;
+            --table|--wide)
+                layout="table"
+                ;;
+            --stacked|--compact)
+                layout="stacked"
                 ;;
             --plain|--no-color)
                 colour_mode="off"
@@ -516,7 +661,7 @@ sysinfo() {
             ;;
     esac
 
-    main "$output_mode" "$use_colour"
+    main "$output_mode" "$use_colour" "$layout"
 }
 
 # Run only when executed directly.
