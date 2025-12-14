@@ -134,7 +134,15 @@ if [[ ! -L "$install_target" ]]; then
 fi
 
 installed_profile_target="$(readlink "$install_target" 2>/dev/null || true)"
-if [[ "$installed_profile_target" != "$install_dir/.bash_profile" ]]; then
+
+# On macOS, /var is commonly a symlink to /private/var; the installer resolves
+# physical paths (cd -P), so normalize our expectation the same way.
+install_dir_phys="$install_dir"
+if [[ -d "$install_dir" ]]; then
+  install_dir_phys="$(cd -P -- "$install_dir" 2>/dev/null && pwd || echo "$install_dir")"
+fi
+
+if [[ "$installed_profile_target" != "$install_dir_phys/.bash_profile" ]]; then
   echo "install.sh --install-dir symlink target mismatch: got '$installed_profile_target'" >&2
   exit 1
 fi

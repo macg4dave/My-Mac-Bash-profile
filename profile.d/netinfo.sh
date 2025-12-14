@@ -101,16 +101,61 @@ _netinfo_ipinfo_json() {
 
 _netinfo_ipinfo_field() {
     local field="$1"
-    local json value
+    local json value parser python_code
 
     json="$(_netinfo_ipinfo_json)"
     [[ -n "$json" ]] || { echo "N/A"; return 0; }
 
-    value="$(printf '%s' "$json" | awk -v k="$field" '
-        match($0, "\""k"\"[[:space:]]*:[[:space:]]*\"([^\"]*)\"", a) { print a[1]; exit }
-    ')"
+    python_code=$'import json\nimport sys\n\nfield = sys.argv[1]\ntry:\n    data = json.load(sys.stdin)\nexcept Exception:\n    print("N/A")\n    sys.exit(0)\nvalue = data.get(field)\nif value is None:\n    print("N/A")\nelse:\n    print(value)\n'
+
+    for parser in python3 python; do
+        if has_cmd "$parser"; then
+            value="$(printf '%s' "$json" | "$parser" -c "$python_code" "$field" 2>/dev/null)"
+            break
+        fi
+    done
+
     [[ -n "$value" ]] || value="N/A"
     echo "$value"
+}
+
+_netinfo_reverse_dns_python() {
+    local ip="$1"
+    [[ -n "$ip" && "$ip" != "N/A" ]] || { echo ""; return 0; }
+
+    local parser host python_code
+    python_code=$'import socket\nimport sys\n\nip = sys.argv[1]\ntry:\n    print(socket.gethostbyaddr(ip)[0])\nexcept Exception:\n    print("")\n'
+
+    for parser in python3 python; do
+        if has_cmd "$parser"; then
+            host="$("$parser" -c "$python_code" "$ip" 2>/dev/null)"
+            [[ -n "$host" ]] && { echo "$host"; return 0; }
+        fi
+    done
+
+    echo ""
+}
+
+_netinfo_reverse_dns() {
+    local ip="$1"
+    local host
+    [[ -n "$ip" && "$ip" != "N/A" ]] || { echo "N/A"; return 0; }
+
+    if has_cmd dig; then
+        host="$(dig +short -x "$ip" 2>/dev/null | awk 'NF && length>0 {print; exit}')"
+    elif has_cmd host; then
+        host="$(host "$ip" 2>/dev/null | awk '/domain name pointer/ {print $5; exit}')"
+    elif has_cmd nslookup; then
+        host="$(nslookup "$ip" 2>/dev/null | awk -F'= ' '/name =/ {print $2; exit}')"
+    fi
+
+    if [[ -z "$host" ]]; then
+        host="$(_netinfo_reverse_dns_python "$ip")"
+    fi
+
+    host="${host%.}"
+    [[ -n "$host" ]] || host="N/A"
+    echo "$host"
 }
 
 _netinfo_default_iface_linux() {
@@ -177,26 +222,76 @@ _netinfo_wifi_ssid_linux() {
 }
 
 _netinfo_wifi_ssid_macos() {
+    # Prefer networksetup, but don't assume en0 is Wi‑Fi (it isn't on all Macs).
     if has_cmd networksetup; then
-        local device="${NETINFO_WIFI_DEVICE:-en0}"
-        local out ssid
-        out="$(networksetup -getairportnetwork "$device" 2>/dev/null || true)"
-        if [[ "$out" =~ You[[:space:]]are[[:space:]]not[[:space:]]associated ]]; then
-            echo "disconnected"
-            return 0
-        fi
-        ssid="$(printf '%s' "$out" | awk -F': ' '{print $2}' 2>/dev/null || true)"
-        if [[ -n "$ssid" ]]; then
-            echo "$ssid"
-        else
-            # If the device exists but we can't parse an SSID, treat as disconnected.
-            if [[ -n "$out" ]]; then
+        local forced_device="${NETINFO_WIFI_DEVICE:-}"
+        local device out ssid
+        local any_wifi_device=0
+
+        if [[ -n "$forced_device" ]]; then
+            any_wifi_device=1
+            out="$(networksetup -getairportnetwork "$forced_device" 2>/dev/null || true)"
+            if [[ "$out" =~ You[[:space:]]are[[:space:]]not[[:space:]]associated ]]; then
                 echo "disconnected"
-            else
-                echo "N/A"
+                return 0
+            fi
+            ssid="$(printf '%s' "$out" | awk -F': ' 'NF>=2 {print $2; exit}' 2>/dev/null || true)"
+            if [[ -n "$ssid" ]]; then
+                echo "$ssid"
+                return 0
+            fi
+            # Device exists but we can't parse; treat as disconnected.
+            [[ -n "$out" ]] && { echo "disconnected"; return 0; }
+        else
+            # Scan all Wi‑Fi/AirPort devices and return the SSID from the first
+            # one that is actually associated.
+            while IFS= read -r device; do
+                [[ -n "$device" ]] || continue
+                any_wifi_device=1
+                out="$(networksetup -getairportnetwork "$device" 2>/dev/null || true)"
+                if [[ "$out" =~ You[[:space:]]are[[:space:]]not[[:space:]]associated ]]; then
+                    continue
+                fi
+
+                ssid="$(printf '%s' "$out" | awk -F': ' 'NF>=2 {print $2; exit}' 2>/dev/null || true)"
+                if [[ -n "$ssid" ]]; then
+                    echo "$ssid"
+                    return 0
+                fi
+
+                # If we got *some* output but couldn't parse, assume it's connected.
+                if [[ -n "$out" ]]; then
+                    echo "disconnected"
+                    return 0
+                fi
+            done < <(
+                networksetup -listallhardwareports 2>/dev/null | awk '
+                    $0 ~ /^Hardware Port: (Wi-Fi|AirPort)$/ { found=1; next }
+                    found && $0 ~ /^Device: / { print $2; found=0 }
+                '
+            )
+
+            if [[ "$any_wifi_device" -eq 1 ]]; then
+                echo "disconnected"
+                return 0
             fi
         fi
     fi
+
+    # Fallback: use the private `airport` tool if present.
+    local airport_bin
+    airport_bin="/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
+    if [[ -x "$airport_bin" ]]; then
+        local ssid
+        ssid="$("$airport_bin" -I 2>/dev/null | awk -F': ' '/^ *SSID:/ {print $2; exit}' | tr -d '\r\n')"
+        if [[ -n "$ssid" ]]; then
+            echo "$ssid"
+        else
+            echo "disconnected"
+        fi
+        return 0
+    fi
+
     echo "N/A"
 }
 
@@ -259,7 +354,8 @@ _netinfo_visible_len() {
     printf '%s' "$1" | awk '
       {
         s=$0
-        gsub(/\033\[[0-9;?]*[ -/]*[@-~]/,"",s)
+        # Use octal ranges (space-/ and @-~) for BSD awk compatibility.
+        gsub(/\033\[[0-9;?]*[\040-\057]*[\100-\176]/,"",s)
         gsub(/\033\][^\007]*\007/,"",s)
         gsub(/\033\][^\033]*\033\\/,"",s)
         gsub(/\033[\(\)][0-9A-Za-z]/,"",s)
@@ -617,8 +713,16 @@ USAGE
     vpn="${vpn:-none}"
     lhost="$(_netinfo_local_hostname)"
     ext="$(_netinfo_external_ip)"
+    # If the /ip endpoint fails but /json works, use that IP (same cache/TTL).
+    if [[ "$ext" == "N/A" ]]; then
+        ext="$(_netinfo_ipinfo_field ip)"
+    fi
     ehost="$(_netinfo_ipinfo_field hostname)"
     city="$(_netinfo_ipinfo_field city)"
+
+    if [[ "$ehost" == "N/A" && "$ext" != "N/A" ]]; then
+        ehost="$(_netinfo_reverse_dns "$ext")"
+    fi
 
     if [[ "$output_mode" == "kv" ]]; then
         local key value

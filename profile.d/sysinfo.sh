@@ -496,7 +496,8 @@ _sysinfo_visible_len() {
       {
         s=$0
         # CSI: ESC [ ... final-byte
-        gsub(/\033\[[0-9;?]*[ -/]*[@-~]/,"",s)
+        # Use octal ranges (space-/ and @-~) to avoid `/` parsing issues on BSD awk.
+        gsub(/\033\[[0-9;?]*[\040-\057]*[\100-\176]/,"",s)
         # OSC: ESC ] ... BEL
         gsub(/\033\][^\007]*\007/,"",s)
         # OSC: ESC ] ... ESC \
