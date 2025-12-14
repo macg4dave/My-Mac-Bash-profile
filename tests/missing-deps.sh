@@ -50,7 +50,7 @@ if [[ ! -s "$netinfo_output" ]]; then
   exit 1
 fi
 
-for key in default_interface gateway local_ip external_ip; do
+for key in default_interface gateway local_ip external_ip external_hostname city; do
   if ! grep -q "^${key}=N/A" "$netinfo_output"; then
     echo "missing-deps guard: '$key' did not report N/A" >&2
     exit 1

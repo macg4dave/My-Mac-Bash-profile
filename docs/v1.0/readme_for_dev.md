@@ -159,12 +159,15 @@ Keys (stable order):
 Keys (stable order):
 
 - `os`
+- `local_hostname`
 - `default_interface`
 - `gateway`
 - `local_ip`
 - `wifi_ssid`
 - `vpn_interfaces` (`none` if none detected)
 - `external_ip` (cached; set `NETINFO_EXTERNAL_IP=0` to disable lookup)
+- `external_hostname` (cached; set `NETINFO_EXTERNAL_IP=0` to disable lookup)
+- `city` (cached; set `NETINFO_EXTERNAL_IP=0` to disable lookup)
 
 ## Environment variable cheat-sheet
 

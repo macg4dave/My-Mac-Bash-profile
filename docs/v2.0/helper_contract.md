@@ -71,13 +71,15 @@ Each key directly maps to the variables in `profile.d/sysinfo.sh`, and every `ma
 ### `netinfo --kv`
 
 ```text
-os
+local_hostname
 default_interface
 gateway
 local_ip
 wifi_ssid
 vpn_interfaces
 external_ip
+external_hostname
+city
 ```
 
 These keys align with the `netinfo` variables and match the output of `tests/helper_contract.sh` so that scripts can rely on predictable parsing. Optional values such as `wifi_ssid` and `vpn_interfaces` gracefully fall back to `N/A` (or `none` for VPN when no interface is detected).

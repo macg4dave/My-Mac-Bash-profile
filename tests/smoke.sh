@@ -55,13 +55,13 @@ netinfo >/dev/null
 
 # Ensure netinfo machine output works.
 netinfo_kv="$(netinfo --kv)"
-echo "$netinfo_kv" | grep -q '^os=' || { echo "netinfo --kv missing os=" >&2; exit 1; }
+echo "$netinfo_kv" | grep -q '^local_hostname=' || { echo "netinfo --kv missing local_hostname=" >&2; exit 1; }
 echo "$netinfo_kv" | grep -q '^local_ip=' || { echo "netinfo --kv missing local_ip=" >&2; exit 1; }
 echo "$netinfo_kv" | grep -q '^external_ip=' || { echo "netinfo --kv missing external_ip=" >&2; exit 1; }
 
 # Ensure netinfo works as a standalone script.
 netinfo_script_kv="$(NETINFO_EXTERNAL_IP=0 bash "$repo_root/profile.d/netinfo.sh" --kv)"
-echo "$netinfo_script_kv" | grep -q '^os=' || { echo "netinfo.sh --kv missing os=" >&2; exit 1; }
+echo "$netinfo_script_kv" | grep -q '^local_hostname=' || { echo "netinfo.sh --kv missing local_hostname=" >&2; exit 1; }
 echo "$netinfo_script_kv" | grep -q '^local_ip=' || { echo "netinfo.sh --kv missing local_ip=" >&2; exit 1; }
 echo "$netinfo_script_kv" | grep -q '^external_ip=' || { echo "netinfo.sh --kv missing external_ip=" >&2; exit 1; }
 

@@ -14,6 +14,17 @@ _netinfo_cache_dir() {
     echo "${XDG_CACHE_HOME:-$HOME/.cache}/my-mac-bash-profile"
 }
 
+_netinfo_local_hostname() {
+    local hn=""
+    if has_cmd hostname; then
+        hn="$(hostname 2>/dev/null || true)"
+    fi
+    [[ -n "$hn" ]] || hn="$(uname -n 2>/dev/null || true)"
+    [[ -n "$hn" ]] || hn="$(awk 'NR==1 {print; exit}' /etc/hostname 2>/dev/null || true)"
+    [[ -n "$hn" ]] || hn="N/A"
+    echo "$hn"
+}
+
 _netinfo_external_ip() {
     if [[ "${NETINFO_EXTERNAL_IP:-1}" == "0" ]]; then
         echo "N/A"
@@ -49,6 +60,57 @@ _netinfo_external_ip() {
         (printf "%s %s\n" "${now:-0}" "$ip" > "$cache_file") 2>/dev/null || true
     fi
     echo "$ip"
+}
+
+_netinfo_ipinfo_json() {
+    if [[ "${NETINFO_EXTERNAL_IP:-1}" == "0" ]]; then
+        echo ""
+        return 0
+    fi
+
+    local ttl="${NETINFO_EXTERNAL_IP_TTL:-300}"
+    local cache_dir cache_file now ts json
+    cache_dir="$(_netinfo_cache_dir)"
+    cache_file="$cache_dir/ipinfo_json"
+    now="$(date +%s 2>/dev/null || echo 0)"
+
+    if [[ -r "$cache_file" ]]; then
+        ts="$(awk 'NR==1 {print $1; exit}' "$cache_file" 2>/dev/null || echo 0)"
+        json="$(awk 'NR==2 {print; exit}' "$cache_file" 2>/dev/null || echo '')"
+        if [[ -n "$json" && "$now" -gt 0 && "$ts" -gt 0 && $((now - ts)) -lt "$ttl" ]]; then
+            echo "$json"
+            return 0
+        fi
+    fi
+
+    if has_cmd curl; then
+        json="$(curl -fsS --max-time 4 https://ipinfo.io/json 2>/dev/null | tr -d '\r\n')"
+    elif has_cmd wget; then
+        json="$(wget -qO- --timeout=4 https://ipinfo.io/json 2>/dev/null | tr -d '\r\n')"
+    else
+        echo ""
+        return 0
+    fi
+
+    [[ -n "$json" ]] || json=""
+    if mkdir -p "$cache_dir" 2>/dev/null; then
+        (printf "%s\n%s\n" "${now:-0}" "$json" > "$cache_file") 2>/dev/null || true
+    fi
+    echo "$json"
+}
+
+_netinfo_ipinfo_field() {
+    local field="$1"
+    local json value
+
+    json="$(_netinfo_ipinfo_json)"
+    [[ -n "$json" ]] || { echo "N/A"; return 0; }
+
+    value="$(printf '%s' "$json" | awk -v k="$field" '
+        match($0, "\""k"\"[[:space:]]*:[[:space:]]*\"([^\"]*)\"", a) { print a[1]; exit }
+    ')"
+    [[ -n "$value" ]] || value="N/A"
+    echo "$value"
 }
 
 _netinfo_default_iface_linux() {
@@ -90,15 +152,52 @@ _netinfo_local_ip_macos() {
 }
 
 _netinfo_wifi_ssid_linux() {
+    # Distinguish between:
+    # - disconnected: Wi-Fi hardware exists but not associated (or SSID cannot be determined)
+    # - N/A: Wi-Fi not present (best-effort)
     if has_cmd iwgetid; then
-        iwgetid -r 2>/dev/null
+        local ssid=""
+        ssid="$(iwgetid -r 2>/dev/null | tr -d '\r\n')"
+        if [[ -n "$ssid" ]]; then
+            echo "$ssid"
+        else
+            echo "disconnected"
+        fi
+        return 0
     fi
+
+    if [[ -d /sys/class/net ]]; then
+        # If any wireless sysfs marker exists, treat Wi-Fi as present.
+        if ls -d /sys/class/net/*/wireless >/dev/null 2>&1; then
+            echo "disconnected"
+            return 0
+        fi
+    fi
+    echo "N/A"
 }
 
 _netinfo_wifi_ssid_macos() {
     if has_cmd networksetup; then
-        networksetup -getairportnetwork "${NETINFO_WIFI_DEVICE:-en0}" 2>/dev/null | awk -F': ' '{print $2}' 2>/dev/null || true
+        local device="${NETINFO_WIFI_DEVICE:-en0}"
+        local out ssid
+        out="$(networksetup -getairportnetwork "$device" 2>/dev/null || true)"
+        if [[ "$out" =~ You[[:space:]]are[[:space:]]not[[:space:]]associated ]]; then
+            echo "disconnected"
+            return 0
+        fi
+        ssid="$(printf '%s' "$out" | awk -F': ' '{print $2}' 2>/dev/null || true)"
+        if [[ -n "$ssid" ]]; then
+            echo "$ssid"
+        else
+            # If the device exists but we can't parse an SSID, treat as disconnected.
+            if [[ -n "$out" ]]; then
+                echo "disconnected"
+            else
+                echo "N/A"
+            fi
+        fi
     fi
+    echo "N/A"
 }
 
 _netinfo_vpn_ifaces_linux() {
@@ -118,7 +217,7 @@ _netinfo_join_lines() {
     awk 'NR==1{printf "%s",$0; next} {printf ",%s",$0} END{print ""}'
 }
 
-_NETINFO_KV_KEYS=(os default_interface gateway local_ip wifi_ssid vpn_interfaces external_ip)
+_NETINFO_KV_KEYS=(local_hostname default_interface gateway local_ip wifi_ssid vpn_interfaces external_ip external_hostname city)
 
 _netinfo_is_tty() {
     [[ -t 1 ]]
@@ -318,7 +417,7 @@ _netinfo_render_box() {
     content_w=$((width - 4))
 
     # Stable label width.
-    label_w=9
+    label_w=14
     value_w=$((content_w - label_w - 3))
     [[ "$value_w" -ge 15 ]] || { _netinfo_render_stacked "$use_colour"; return 0; }
 
@@ -345,8 +444,8 @@ _netinfo_render_box() {
     local row=0 row_bg value
 
     row_bg="$(_netinfo_box_row_bg "$row")"
-    value="$(_netinfo_style_value "$row_bg" "$os" value)"
-    _netinfo_box_print_row "$row_bg" "OS" "$value" "$label_w" "$value_w" "$v"
+    value="$(_netinfo_style_value "$row_bg" "$lhost" value)"
+    _netinfo_box_print_row "$row_bg" "Local Hostname" "$value" "$label_w" "$value_w" "$v"
     row=$((row + 1))
 
     row_bg="$(_netinfo_box_row_bg "$row")"
@@ -364,10 +463,12 @@ _netinfo_render_box() {
     _netinfo_box_print_row "$row_bg" "Local IP" "$value" "$label_w" "$value_w" "$v"
     row=$((row + 1))
 
-    row_bg="$(_netinfo_box_row_bg "$row")"
-    value="$(_netinfo_style_value "$row_bg" "$ssid" value)"
-    _netinfo_box_print_row "$row_bg" "Wi-Fi" "$value" "$label_w" "$value_w" "$v"
-    row=$((row + 1))
+    if [[ "$ssid" != "N/A" ]]; then
+        row_bg="$(_netinfo_box_row_bg "$row")"
+        value="$(_netinfo_style_value "$row_bg" "$ssid" value)"
+        _netinfo_box_print_row "$row_bg" "Wi-Fi" "$value" "$label_w" "$value_w" "$v"
+        row=$((row + 1))
+    fi
 
     row_bg="$(_netinfo_box_row_bg "$row")"
     # VPN may be long; wrap it.
@@ -388,6 +489,16 @@ _netinfo_render_box() {
     row_bg="$(_netinfo_box_row_bg "$row")"
     value="$(_netinfo_style_value "$row_bg" "$ext" value)"
     _netinfo_box_print_row "$row_bg" "Ext IP" "$value" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_netinfo_box_row_bg "$row")"
+    value="$(_netinfo_style_value "$row_bg" "$ehost" value)"
+    _netinfo_box_print_row "$row_bg" "Ext Hostname" "$value" "$label_w" "$value_w" "$v"
+    row=$((row + 1))
+
+    row_bg="$(_netinfo_box_row_bg "$row")"
+    value="$(_netinfo_style_value "$row_bg" "$city" value)"
+    _netinfo_box_print_row "$row_bg" "City" "$value" "$label_w" "$value_w" "$v"
 
     printf '%s%s%s\n' \
         "${_NETINFO_SGR_BORDER}${bl}${_NETINFO_SGR_RESET}" \
@@ -400,23 +511,31 @@ _netinfo_render_stacked() {
     _netinfo_style_init "$use_colour"
 
     if [[ "$use_colour" == "1" ]]; then
-        printf '%sOS%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$os"
+        printf '%sLocal Hostname%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$lhost"
         printf '%sDefault interface%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$iface"
         printf '%sGateway%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$gw"
         printf '%sLocal IP%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$lip"
-        printf '%sWi-Fi SSID%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$ssid"
+        if [[ "$ssid" != "N/A" ]]; then
+            printf '%sWi-Fi SSID%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$ssid"
+        fi
         printf '%sVPN interfaces%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$vpn"
         printf '%sExternal IP (cached)%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$ext"
+        printf '%sExternal Hostname (cached)%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$ehost"
+        printf '%sCity (cached)%s: %s\n' "${_NETINFO_SGR_LABEL}" "${_NETINFO_SGR_RESET}" "$city"
         return 0
     fi
 
-    echo "OS: $os"
+    echo "Local Hostname: $lhost"
     echo "Default interface: $iface"
     echo "Gateway: $gw"
     echo "Local IP: $lip"
-    echo "Wi-Fi SSID: $ssid"
+    if [[ "$ssid" != "N/A" ]]; then
+        echo "Wi-Fi SSID: $ssid"
+    fi
     echo "VPN interfaces: $vpn"
     echo "External IP (cached): $ext"
+    echo "External Hostname (cached): $ehost"
+    echo "City (cached): $city"
 }
 
 netinfo() {
@@ -474,16 +593,16 @@ USAGE
         shift
     done
 
-    local os iface gw lip ssid ext vpn
-    os="$(uname -s 2>/dev/null || echo 'Unknown')"
+    local platform iface gw lip ssid ext vpn lhost ehost city
+    platform="$(uname -s 2>/dev/null || echo 'Unknown')"
 
-    if [[ "$os" == "Linux" ]]; then
+    if [[ "$platform" == "Linux" ]]; then
         iface="$(_netinfo_default_iface_linux)"
         gw="$(_netinfo_default_gw_linux)"
         lip="$(_netinfo_local_ip_linux)"
         ssid="$(_netinfo_wifi_ssid_linux)"
         vpn="$(_netinfo_vpn_ifaces_linux | _netinfo_join_lines 2>/dev/null)"
-    elif [[ "$os" == "Darwin" ]]; then
+    elif [[ "$platform" == "Darwin" ]]; then
         iface="$(_netinfo_default_iface_macos)"
         gw="$(_netinfo_default_gw_macos)"
         lip="$(_netinfo_local_ip_macos)"
@@ -496,19 +615,24 @@ USAGE
     lip="${lip:-N/A}"
     ssid="${ssid:-N/A}"
     vpn="${vpn:-none}"
+    lhost="$(_netinfo_local_hostname)"
     ext="$(_netinfo_external_ip)"
+    ehost="$(_netinfo_ipinfo_field hostname)"
+    city="$(_netinfo_ipinfo_field city)"
 
     if [[ "$output_mode" == "kv" ]]; then
         local key value
         for key in "${_NETINFO_KV_KEYS[@]}"; do
             case "$key" in
-                os) value="$os" ;;
+                local_hostname) value="$lhost" ;;
                 default_interface) value="$iface" ;;
                 gateway) value="$gw" ;;
                 local_ip) value="$lip" ;;
                 wifi_ssid) value="$ssid" ;;
                 vpn_interfaces) value="$vpn" ;;
                 external_ip) value="$ext" ;;
+                external_hostname) value="$ehost" ;;
+                city) value="$city" ;;
                 *) value="N/A" ;;
             esac
             printf '%s=%s\n' "$key" "${value:-N/A}"

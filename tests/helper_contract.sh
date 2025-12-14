@@ -28,7 +28,7 @@ for helper in "${helpers[@]}"; do
   "$helper" --help >/dev/null
 done
 
-expected_netinfo=(os default_interface gateway local_ip wifi_ssid vpn_interfaces external_ip)
+expected_netinfo=(local_hostname default_interface gateway local_ip wifi_ssid vpn_interfaces external_ip external_hostname city)
 netinfo_keys=()
 while IFS='=' read -r key _; do
   [[ -n "$key" ]] || continue
