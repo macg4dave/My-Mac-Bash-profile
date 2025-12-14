@@ -19,7 +19,9 @@ fi
 # Common PATH exports and hygiene.
 #------------------------------------------------------------------------------
 
-export PS1="\[\e[36;40m\]\u\[\e[m\]\[\e[35m\]@\[\e[m\][\[\e[33m\]\h\[\e[m\]]\[\e[36m\]\w\[\e[m\]: "
+if [[ "${BASH_PROFILE_SET_PS1:-1}" != "0" ]]; then
+	export PS1="\[\e[36;40m\]\u\[\e[m\]\[\e[35m\]@\[\e[m\][\[\e[33m\]\h\[\e[m\]]\[\e[36m\]\w\[\e[m\]: "
+fi
 
 # macOS color env is harmless elsewhere, but only set when on macOS.
 if ${IS_MAC:-false}; then
@@ -83,6 +85,35 @@ export BASH_SILENCE_DEPRECATION_WARNING=1
 
 __bp_modules_enable="${BASH_PROFILE_MODULES_ENABLE:-}"
 __bp_modules_disable="${BASH_PROFILE_MODULES_DISABLE:-}"
+
+# shellcheck disable=SC2329
+__bp_is_interactive() {
+	[[ $- == *i* ]]
+}
+
+# shellcheck disable=SC2329
+__bp_warn() {
+	# Warnings must be interactive-only to avoid breaking scripts.
+	__bp_is_interactive || return 0
+	printf '%s\n' "$*" >&2
+}
+
+# shellcheck disable=SC2329
+__bp_deprecated_env() {
+	# Usage: __bp_deprecated_env OLD_ENV NEW_ENV
+	# If OLD_ENV is set and NEW_ENV is not, copy the value and warn.
+	local old_name="$1"
+	local new_name="$2"
+	# Indirect expansion: safe in Bash 3.2.
+	local old_val="${!old_name-}"
+	local new_val="${!new_name-}"
+
+	[[ -n "$old_val" ]] || return 0
+	[[ -z "$new_val" ]] || return 0
+
+	export "${new_name}=${old_val}"
+	__bp_warn "my-mac-bash-profile: '$old_name' is deprecated; use '$new_name' instead"
+}
 
 __bp_list_contains_any() {
 	# Usage: __bp_list_contains_any "list" candidate1 [candidate2 ...]
@@ -185,7 +216,7 @@ if [[ -d "$__bp_profile_d" ]]; then
 fi
 
 unset __bp_source __bp_dir __bp_link __bp_root __bp_profile_d __bp_f __bp_modules_enable __bp_modules_disable
-unset -f __bp_list_contains_any __bp_should_source_module 2>/dev/null || true
+unset -f __bp_list_contains_any __bp_should_source_module __bp_is_interactive __bp_warn __bp_deprecated_env 2>/dev/null || true
 
 #-----------------------------------
 ## END

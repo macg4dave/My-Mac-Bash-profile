@@ -20,3 +20,4 @@ test:
 	@bash tests/safe-source.sh
 	@bash tests/missing-deps.sh
 	@bash tests/helper_contract.sh
+	@bash tests/release-hygiene.sh

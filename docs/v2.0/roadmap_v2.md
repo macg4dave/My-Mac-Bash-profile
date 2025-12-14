@@ -38,12 +38,12 @@ Last updated: 2025-12-14
 
 | Milestone | Status | Definition of done (DoD) | Next concrete action | Target | Blocked by |
 |---|---:|---|---|---|---|
-| P0 — Define v2 scope + decisions | ⏳ | v2 scope + deprecations are written; upgrade path documented; “won’t do” list exists | Finalize `docs/v2.0/scope_v2.md`, compatibility contract, and config/release outlines | v2.0.0 | — |
-| P1 — Reliability + performance | 🟡 | Startup stays fast; safe-to-source contract enforced; expanded test matrix + regression tests | Decide/measure startup budget + add perf smoke check | v2.0.0 | B-001, B-002 |
+| P0 — Define v2 scope + decisions | ✅ | v2 scope + deprecations are written; upgrade path documented; “won’t do” list exists | — | v2.0.0 | — |
+| P1 — Reliability + performance | ✅ | Startup stays fast; safe-to-source contract enforced; expanded test matrix + regression tests | — | v2.0.0 | — |
 | P2 — Consistent CLI/UX across helpers | ✅ | Unified flags (`--help`, `--kv`, `--no-color`); stable exit codes; consistent errors | Keep `docs/v2.0/helper_contract.md` and `tests/helper_contract.sh` synchronized with the helpers | v2.0.0 | — |
-| P3 — Config + module lifecycle | 🟡 | One config source of truth; clear enable/disable; module metadata + ordering rules documented | Pick config format + precedence rules | v2.0.0 | B-003 |
-| P4 — Distribution + releases | 🟡 | Release process is documented + automated; changelog is release-ready; upgrade notes exist | Decide release automation approach (tags + notes) | v2.0.0 | B-005 |
-| P5 — Optional expansions | 🟡 | Add-ons are opt-in, tested, and don’t affect startup | Curate a short list of “safe” extras | v2.x | — |
+| P3 — Config + module lifecycle | ✅ | One config source of truth; clear enable/disable; module metadata + ordering rules documented | — | v2.0.0 | — |
+| P4 — Distribution + releases | ✅ | Release process is documented + automated; changelog is release-ready; upgrade notes exist | — | v2.0.0 | — |
+| P5 — Optional expansions | ✅ | Add-ons are opt-in, tested, and don’t affect startup | — | v2.0.0 | — |
 
 ## Priorities (P0 → P5)
 
@@ -58,21 +58,21 @@ Last updated: 2025-12-14
 
 | Decision | Default recommendation | Why it matters | Status |
 |---|---|---|---:|
-| v2 “breaking changes” policy | Prefer **soft-deprecations** (warn + support old env vars for ≥1 release) | Prevents “can’t login” surprises | 🟡 |
-| Minimum Bash version | Keep supporting **macOS `/bin/bash` 3.2** | It’s the hardest constraint and defines portability | 🟡 |
-| Config format | Start with **env vars + single optional config file** | Keeps bootstrap dependency-free | 🟡 |
-| Machine output format | Keep **`--kv`** as the stable baseline | Easiest to produce in pure Bash and scriptable | 🟡 |
-| Release cadence | “When ready”, but tag + changelog every release | Makes upgrades auditable | 🟡 |
+| v2 “breaking changes” policy | Prefer **soft-deprecations** (warn + support old env vars for ≥1 release) | Prevents “can’t login” surprises | ✅ |
+| Minimum Bash version | Keep supporting **macOS `/bin/bash` 3.2** | It’s the hardest constraint and defines portability | ✅ |
+| Config format | Start with **env vars + single optional config file** | Keeps bootstrap dependency-free | ✅ |
+| Machine output format | Keep **`--kv`** as the stable baseline | Easiest to produce in pure Bash and scriptable | ✅ |
+| Release cadence | “When ready”, but tag + changelog every release | Makes upgrades auditable | ✅ |
 
 ## Blocker register (ranked P0 → P*)
 
 | ID | Priority | Blocker / risk | Impact | Mitigation / next step | Blocks |
 |---|---:|---|---|---|---|
-| B-001 | P1 | Startup time regression as modules grow | Slower shells; users disable the profile | Define a startup budget + add perf smoke check | P1–P5 |
-| B-002 | P1 | “Safe to source” violations creep in | Login shell breaks; side effects on source | Add a test that sources modules under restrictive env vars and forbids external calls | P1–P5 |
-| B-003 | P3 | Config precedence becomes confusing | Users can’t predict behavior or debug | Define precedence + document it with examples | P3 |
+| B-001 | P1 | Startup time regression as modules grow | Slower shells; users disable the profile | Implemented budget + perf check: `tests/perf-startup.sh` (run via `make test`) | — |
+| B-002 | P1 | “Safe to source” violations creep in | Login shell breaks; side effects on source | Implemented guardrails: `tests/safe-source.sh` + `tests/smoke.sh` | — |
+| B-003 | P3 | Config precedence becomes confusing | Users can’t predict behavior or debug | Documented with examples: `docs/v2.0/config_and_modules.md` + README | — |
 | B-004 | P2 | Flag/exit-code drift between helpers | Scripts break; UX feels inconsistent | `docs/v2.0/helper_contract.md` + `tests/helper_contract.sh` lock down the contract for flags, `--kv`, and exit codes | — |
-| B-005 | P4 | Release flow is manual and error-prone | Inconsistent tags/notes; stale changelog | Automate release notes + add a checklist | P4 |
+| B-005 | P4 | Release flow is manual and error-prone | Inconsistent tags/notes; stale changelog | Checklist + CI check added: `docs/v2.0/release_process.md` + `tests/release-hygiene.sh` | — |
 | B-006 | P1 | OS tool variance (macOS vs Linux distros) | Noisy errors or missing data | Expand guardrails + standardize `N/A` behavior | P1–P2 |
 | B-007 | P1 | GNU-vs-BSD CLI incompatibilities | Breakages on stock macOS | Keep portability rules explicit + tested | P1 |
 
@@ -95,16 +95,19 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 ### Work items (P0)
 
 - [x] **P0.1** Capture the compatibility contract; link to `docs/v2.0/compatibility_contract.md` for the supported platforms/tools/migration rules.
-- [ ] **P0.2** Define what counts as a breaking change, how deprecations are communicated, and what “soft-deprecation” tooling is needed (warnings, old env vars, docs).
-- [ ] **P0.3** Finalize the config strategy (env vars + optional config file) and document precedence/resolution order so users can predict what will load.
-- [ ] **P0.4** Decide if any helpers/modules need renaming or deprecation mappings and capture those in a short migration table.
-- [ ] **P0.5** Create a v2 release checklist that covers tagging, changelog updates, and any manual verification steps.
+- [x] **P0.2** Define what counts as a breaking change, how deprecations are communicated, and what “soft-deprecation” tooling is needed (warnings, old env vars, docs).
+- [x] **P0.3** Finalize the config strategy (env vars + optional config file) and document precedence/resolution order so users can predict what will load.
+- [x] **P0.4** Decide if any helpers/modules need renaming or deprecation mappings and capture those in a short migration table.
+- [x] **P0.5** Create a v2 release checklist that covers tagging, changelog updates, and any manual verification steps.
 
 ### P0 status
 
 - Compatibility contract: ✅ defined in `docs/v2.0/compatibility_contract.md`, including supported shells, tools, and safe-to-source guarantees.
 - Scope, supported guardrails, and absolute-outs are spelled out in `docs/v2.0/scope_v2.md`, giving us the “won’t do” list and upgrade context.
-- Next steps: finalize the config/release plan (P0.3/P0.5) and start documenting breaking change/deprecation paths (P0.2/P0.4).
+- Deprecation + breaking-change policy: ✅ captured in `docs/v2.0/deprecation_policy.md` and `docs/v2.0/compatibility_contract.md`.
+- Upgrade/migration notes: ✅ `docs/v2.0/migration_from_v1.md`.
+- Release checklist: ✅ `docs/v2.0/release_process.md`.
+- Config + precedence: ✅ `docs/v2.0/config_and_modules.md`.
 
 ### Acceptance criteria (P0)
 
@@ -129,18 +132,21 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 
 ### Work items (P1)
 
-- [ ] **P1.1** Define startup performance budget (e.g., “under X ms on GitHub runners”).
-- [ ] **P1.2** Add a perf test (e.g., time `bash -lc 'source ~/.bash_profile'`) with thresholds.
-- [ ] **P1.3** Add a “no side-effects on source” test (disable network, stub PATH, verify no writes outside XDG dirs).
-- [ ] **P1.4** Add a “missing deps” matrix test (PATH without `curl`, without `ip`, without `diskutil`, etc.).
-- [ ] **P1.5** Document the “safe to source” rules as a contributor checklist.
+- [x] **P1.1** Define startup performance budget (e.g., “under X ms on GitHub runners”).
+- [x] **P1.2** Add a perf test (e.g., time `bash -lc 'source ~/.bash_profile'`) with thresholds.
+- [x] **P1.3** Add a “no side-effects on source” test (disable network, stub PATH, verify no writes outside XDG dirs).
+- [x] **P1.4** Add a “missing deps” matrix test (PATH without `curl`, without `ip`, without `diskutil`, etc.).
+- [x] **P1.5** Document the “safe to source” rules as a contributor checklist.
 
 ### P1 status
 
 - `tests/smoke.sh` (invoked via `make test`) already enforces much of P1: it runs the profile in a fake `HOME`, stubs `NETINFO_EXTERNAL_IP=0` to avoid network calls, verifies `sysinfo`, `netinfo`, and `extract` are defined even when helpers are disabled, and confirms helpers can be run both via the interactive loader and as standalone scripts.
 - That script also exercises `scripts/install.sh` and the bootstrap helpers in dry-run mode, so the “no writes on source” requirement is covered until we add more explicit guardrails.
 - `docs/v2.0/compatibility_contract.md` and `docs/v2.0/scope_v2.md` already document the “safe-to-source” and portability expectations (B-002, B-006, B-007), which gives us concrete language to test against.
-- Next steps: define a measurable budget (e.g., record `real` seconds for `source ~/.bash_profile` on the CI baseline) and plug that timing into a new perf check, then layer a missing-deps matrix test that manipulates `PATH`/command availability to confirm helpers degrade to `N/A` without failing.
+- Startup budget + perf check: ✅ `tests/perf-startup.sh` (budget: 0.9s on the CI baseline).
+- No side-effects on source: ✅ `tests/safe-source.sh`.
+- Missing deps matrix: ✅ `tests/missing-deps.sh`.
+- Contributor-facing rules: ✅ documented in `docs/v2.0/scope_v2.md` and `docs/v2.0/compatibility_contract.md`.
 
 ### Acceptance criteria (P1)
 
@@ -149,7 +155,7 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 
 ### Blockers (P1)
 
-- B-001, B-002, B-006, B-007
+- (none)
 
 ---
 
@@ -199,11 +205,11 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 
 ### Work items (P3)
 
-- [ ] **P3.1** Decide on config approach (env-only vs optional config file).
-- [ ] **P3.2** Document precedence rules (repo local override vs XDG override vs env vars).
-- [ ] **P3.3** Add a `mm-bash-profile doctor` (or equivalent) to print detected config + module load results (optional).
-- [ ] **P3.4** Add module metadata conventions (module name, OS guards, optional dependencies).
-- [ ] **P3.5** Add troubleshooting docs for “module X broke startup” and “how to bisect”.
+- [x] **P3.1** Decide on config approach (env-only vs optional config file).
+- [x] **P3.2** Document precedence rules (repo local override vs XDG override vs env vars).
+- [x] **P3.3** Add a `mm-bash-profile doctor` (or equivalent) to print detected config + module load results (optional).
+- [x] **P3.4** Add module metadata conventions (module name, OS guards, optional dependencies).
+- [x] **P3.5** Add troubleshooting docs for “module X broke startup” and “how to bisect”.
 
 ### Acceptance criteria (P3)
 
@@ -212,7 +218,7 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 
 ### Blockers (P3)
 
-- B-003
+- (none)
 
 ---
 
@@ -228,11 +234,11 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 
 ### Work items (P4)
 
-- [ ] **P4.1** Define release artifact scope (just tags? GitHub releases? packaged tarball?).
-- [ ] **P4.2** Add a `docs/v2.0/release_process.md` checklist.
-- [ ] **P4.3** Add CI job for “release hygiene” (changelog presence, version strings if used).
-- [ ] **P4.4** Decide whether to publish via Homebrew (formula/cask) or keep git-only.
-- [ ] **P4.5** Write `docs/v2.0/migration_from_v1.md`.
+- [x] **P4.1** Define release artifact scope (just tags? GitHub releases? packaged tarball?).
+- [x] **P4.2** Add a `docs/v2.0/release_process.md` checklist.
+- [x] **P4.3** Add CI job for “release hygiene” (changelog presence, version strings if used).
+- [x] **P4.4** Decide whether to publish via Homebrew (formula/cask) or keep git-only.
+- [x] **P4.5** Write `docs/v2.0/migration_from_v1.md`.
 
 ### Acceptance criteria (P4)
 
@@ -241,7 +247,7 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 
 ### Blockers (P4)
 
-- B-005
+- (none)
 
 ---
 
@@ -258,7 +264,7 @@ The existing scope (`docs/v2.0/scope_v2.md`) and compatibility contract (`docs/v
 
 ### Idea backlog (P5)
 
-- [ ] Add completions for `sysinfo` / `netinfo` flags (Bash 3.2 compatible).
-- [ ] Add a `doctor` command that prints what’s loaded and why (if not done in P3).
-- [ ] Add a minimal prompt theming toggle (opt-in; default unchanged).
-- [ ] Add a small `pathinfo` helper (print PATH entries, duplicates, and missing dirs).
+- [x] Add completions for `sysinfo` / `netinfo` flags (Bash 3.2 compatible).
+- [x] Add a `doctor` command that prints what’s loaded and why (if not done in P3).
+- [x] Add a minimal prompt theming toggle (opt-in; default unchanged).
+- [x] Add a small `pathinfo` helper (print PATH entries, duplicates, and missing dirs).

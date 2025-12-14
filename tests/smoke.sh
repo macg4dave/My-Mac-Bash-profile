@@ -37,7 +37,7 @@ ln -s "$repo_root/.bash_profile" "$HOME/.bash_profile"
 source "$HOME/.bash_profile"
 
 # Verify key helpers are defined.
-for fn in sysinfo netinfo extract; do
+for fn in sysinfo netinfo extract pathinfo; do
   if ! declare -F "$fn" >/dev/null; then
     echo "Expected function '$fn' to be defined" >&2
     exit 1
@@ -108,6 +108,9 @@ echo "$sysinfo_script_human" | grep -Eq '(^|[[:space:]])OS[:[:space:]]' || {
 
 # Ensure extract help works.
 extract --help >/dev/null
+
+# Ensure pathinfo help works.
+pathinfo --help >/dev/null
 
 # Ensure installer dry-run works and does not modify the filesystem.
 tmpdir="$(mktemp -d)"

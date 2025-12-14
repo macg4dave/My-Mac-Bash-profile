@@ -1070,6 +1070,30 @@ sysinfo() {
     main "$output_mode" "$use_colour" "$layout"
 }
 
+#------------------------------------------------------------------------------
+# Bash completion (registered only for interactive shells)
+#------------------------------------------------------------------------------
+
+_sysinfo_completion() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    if [[ "$cur" == -* ]]; then
+        # shellcheck disable=SC2207
+        COMPREPLY=( $(compgen -W "-h --help --kv --key-value --box --table --wide --stacked --compact --plain --no-color --color --" -- "$cur") )
+        return 0
+    fi
+
+    COMPREPLY=()
+    return 0
+}
+
+if [[ $- == *i* ]]; then
+    if command -v complete >/dev/null 2>&1; then
+        complete -F _sysinfo_completion sysinfo 2>/dev/null || true
+    fi
+fi
+
 # Run only when executed directly.
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     sysinfo "$@"

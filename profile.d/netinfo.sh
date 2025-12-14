@@ -658,6 +658,30 @@ USAGE
     esac
 }
 
+#------------------------------------------------------------------------------
+# Bash completion (registered only for interactive shells)
+#------------------------------------------------------------------------------
+
+_netinfo_completion() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    if [[ "$cur" == -* ]]; then
+        # shellcheck disable=SC2207
+        COMPREPLY=( $(compgen -W "-h --help --kv --key-value --box --stacked --plain --no-color --color --" -- "$cur") )
+        return 0
+    fi
+
+    COMPREPLY=()
+    return 0
+}
+
+if [[ $- == *i* ]]; then
+    if command -v complete >/dev/null 2>&1; then
+        complete -F _netinfo_completion netinfo 2>/dev/null || true
+    fi
+fi
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     netinfo "$@"
 fi

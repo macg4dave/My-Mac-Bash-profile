@@ -110,6 +110,7 @@ If a command exists, it’s ready to use. If it doesn’t, nothing breaks.
 | `flushdns`   | Clears DNS cache (safe, best‑effort)     |
 | `jd <url>`   | Resume‑safe file download                |
 | `jdir <url>` | Download a full directory                |
+| `pathinfo`   | Inspect PATH entries (dups/missing)      |
 
 macOS‑only extras:
 
@@ -202,6 +203,16 @@ Names can be `netinfo` or `netinfo.sh`.
 
 ---
 
+## Prompt control
+
+If you already manage your prompt elsewhere, you can prevent this profile from setting `PS1`:
+
+```bash
+export BASH_PROFILE_SET_PS1=0
+```
+
+---
+
 ## Local overrides
 
 Add custom logic without touching the repo:
@@ -210,6 +221,16 @@ Add custom logic without touching the repo:
 * `~/.config/my-mac-bash-profile/local.sh`
 
 Loaded last.
+
+---
+
+## Doctor / diagnostics
+
+To print what the profile *thinks* your configuration is (enable/disable lists, helper presence, override files):
+
+```bash
+mm_bash_profile_doctor
+```
 
 ---
 
