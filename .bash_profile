@@ -30,12 +30,12 @@ fi
 
 # PATH hygiene: only prepend directories that exist.
 if declare -F path_prepend_if_exists >/dev/null 2>&1; then
-	path_prepend_if_exists "/usr/local/opt/cython/bin"
 	path_prepend_if_exists "/usr/local/sbin"
 	path_prepend_if_exists "/opt/local/bin"
 	path_prepend_if_exists "/opt/local/sbin"
+	path_prepend_if_exists "/usr/local/opt/curl/bin"
+	path_prepend_if_exists "/usr/local/opt/cython/bin"
 else
-	export PATH="/usr/local/opt/cython/bin:$PATH"
 	export PATH="/usr/local/sbin:$PATH"
 	export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
 fi
@@ -58,6 +58,12 @@ done
 __bp_root="$(cd -P -- "$(dirname "$__bp_source")" && pwd)"
 
 __bp_profile_d="$__bp_root/profile.d"
+
+#------------------------------------------------------------------------------
+# Surpess bash deprecation warning on macOS
+#------------------------------------------------------------------------------
+
+export BASH_SILENCE_DEPRECATION_WARNING=1
 
 #------------------------------------------------------------------------------
 # Module loader configuration
